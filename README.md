@@ -5,7 +5,7 @@ A screen-reader accessibility mod for the Steam version of **Persona 4 Golden**,
 user's screen reader (NVDA / SAPI via Tolk) and adds blind-playable navigation, so the game can be
 played without sight.
 
-**Latest release: v1.5.0.**
+**Latest release: v2.0.0.**
 
 ## What it does
 
@@ -64,3 +64,14 @@ without them the FlowScript-based features silently no-op. NVDA (or a SAPI voice
 - Speech via **Tolk** (NVDA / SAPI); audio cues via **NAudio**.
 - Runs on **Reloaded II** and the **File Emulation Framework** by Sewer56 and contributors, and
   **Custom Sub Menu** by AnimatedSwine37, Tekka, and ShrineFox.
+
+## License
+
+Free software under the **GNU General Public License v3.0** — see `LICENSE` and `COPYRIGHT`.
+
+Built on [p4g64.accessibility](https://github.com/AnimatedSwine37/p4g64.accessibility) by
+**AnimatedSwine37** (GPL-3.0); modifications and additions © 2026 **Haru**, also GPL-3.0. You are
+free to use, share and modify it — if you distribute a modified version, its source must stay open
+under the same license, with the original credits kept.
+
+The mod is always free. If anyone asks you to pay for it, you can get it here at no cost.
