@@ -41,6 +41,14 @@ internal static class Speech
     /// <summary>Speak a line AND record it to history. Drop-in for the old <c>Tolk.Output</c>.</summary>
     internal static void Say(string text, bool interrupt = true)
     {
+        // TEMP perf shim (heaviness diag 2026-07-27): measures the full cost incl. Tolk IPC.
+        long t0 = Components.PerfDiag.Begin();
+        try { SayCore(text, interrupt); }
+        finally { Components.PerfDiag.End(Components.PerfDiag.B.SpeechSay, t0); }
+    }
+
+    private static void SayCore(string text, bool interrupt = true)
+    {
         if (string.IsNullOrWhiteSpace(text)) return;
         text = Normalize(text);
         if (Components.FieldTracker.InBattle)   // spam guard is battle-only (see note above)

@@ -1,0 +1,72 @@
+{
+  "22_2": [
+    {
+      "X": 713.62,
+      "Z": -405.29,
+      "Bit": 3648,
+      "PresentWhenSet": false,
+      "ItemId": 41,
+      "Proc": "liquor_item"
+    }
+  ],
+  "23_2": [
+    {
+      "X": -0.3,
+      "Z": -301.11,
+      "Bit": 3693,
+      "PresentWhenSet": true,
+      "ItemId": 79,
+      "Proc": "castle_item"
+    }
+  ],
+  "24_2": [
+    {
+      "X": -5.58,
+      "Z": -3246.49,
+      "Bit": 3718,
+      "PresentWhenSet": true,
+      "ItemId": 174,
+      "Proc": "sauna_item"
+    }
+  ],
+  "25_2": [
+    {
+      "X": -0.73,
+      "Z": -3993.21,
+      "Bit": 3752,
+      "PresentWhenSet": true,
+      "ItemId": 219,
+      "Proc": "playhouse_item"
+    }
+  ],
+  "26_2": [
+    {
+      "X": 943.1,
+      "Z": 3694.92,
+      "Bit": 3781,
+      "PresentWhenSet": true,
+      "ItemId": 24,
+      "Proc": "bone_object"
+    }
+  ],
+  "27_2": [
+    {
+      "X": -1.03,
+      "Z": 47.15,
+      "Bit": 3814,
+      "PresentWhenSet": true,
+      "ItemId": 193,
+      "Proc": "base_item"
+    }
+  ],
+  "28_2": [
+    {
+      "X": -503.9,
+      "Z": -4687.89,
+      "Bit": 3842,
+      "PresentWhenSet": true,
+      "ItemId": 629,
+      "Proc": "heaven_item"
+    }
+  ]
+}

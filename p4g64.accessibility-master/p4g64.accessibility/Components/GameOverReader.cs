@@ -69,9 +69,10 @@ internal sealed unsafe class GameOverReader
     private nint OnText(nint p1, byte p2, byte p3, uint p4, byte p5, nint p6)
     {
         nint ret = _hook!.OriginalFunction(p1, p2, p3, p4, p5, p6);
+        long t0 = PerfDiag.Begin();
         try
         {
-            if (!_active || p6 == 0) return ret;   // poem lines are glyph runs only
+            if (!_active || p6 == 0) return ret;
             long now = Environment.TickCount64;
             // a stale line (scroll paused / last line) flushes on the heartbeat
             if (_line.Length > 0 && now - _lastGlyphTick > 300 && p6 == _lineObj) FlushLine();
@@ -82,6 +83,7 @@ internal sealed unsafe class GameOverReader
             if (_line.Length > 200) FlushLine();
         }
         catch { /* never let a hook throw */ }
+        finally { PerfDiag.End(PerfDiag.B.GameOverCap, t0); }
         return ret;
     }
 
@@ -123,29 +125,7 @@ internal sealed unsafe class GameOverReader
         return false;
     }
 
-    private static string ReadCStr(nint p, int maxLen)
-    {
-        if (p == 0) return "";
-        ulong a = (ulong)p;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return "";
-        byte* qbuf = stackalloc byte[48];
-        if (VirtualQuery(p, qbuf, 48) == 0) return "";
-        if (*(uint*)(qbuf + 32) != 0x1000) return "";
-        uint protect = *(uint*)(qbuf + 36);
-        if ((protect & 0x01) != 0 || (protect & 0x100) != 0) return "";
-        nint regionBase = *(nint*)(qbuf + 0);
-        nint regionSize = *(nint*)(qbuf + 24);
-        ulong end = (ulong)regionBase + (ulong)regionSize;
-        int safe = (int)System.Math.Min((ulong)maxLen, end - a);
-        var sb = new System.Text.StringBuilder(maxLen);
-        for (int i = 0; i < safe; i++)
-        {
-            byte b = *(byte*)(p + i);
-            if (b == 0) break;
-            if (b >= 0x20 && b < 0x7F) sb.Append((char)b);
-        }
-        return sb.ToString();
-    }
+    private static string ReadCStr(nint p, int maxLen) => ReadCStringRpm(p, maxLen);  // RPM since 2026-07-27 (menu-heaviness fix: VirtualQuery stalls under allocator contention)
 
     private static bool IsReadableStatic(nint addr, int size)
     {

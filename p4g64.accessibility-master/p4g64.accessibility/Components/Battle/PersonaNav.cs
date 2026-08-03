@@ -64,9 +64,47 @@ internal sealed unsafe class PersonaNav
         }
     }
 
+    // ── The EQUIPPED persona is the truth on confirm (2026-08-02) ────────────
+    // Committing a change from inside the panel REORDERS the stock array, so the
+    // list row that redraws afterwards is not necessarily what you equipped (user:
+    // "it'll read the wrong persona as change and become a mess"). Watch the unit's
+    // own equipped-persona id instead and announce THAT — it cannot be wrong.
+    private int _eqId = int.MinValue;
+    private long _personaMenuSeen;
+    private long _muteAutoUntil;
+    internal static long MuteListReadsUntil;   // PersonaSelect checks this too
+
+    /// <summary>Announce the persona actually EQUIPPED when it changes. Source =
+    /// Battle.EquippedStockEntry (the live stock cursor), NOT unit+0xA4 — that read
+    /// a constant 1 ("Izanagi") for every persona (log-proven 2026-08-02).</summary>
+    private void WatchEquipChange()
+    {
+        nint e = Battle.EquippedStockEntry();
+        if (e == 0 || !IsReadable(e, 4)) return;
+        int id = *(short*)(e + 2);
+        if (_eqId == int.MinValue) { _eqId = id; return; }        // baseline, silent
+        if (id == _eqId) return;
+        _eqId = id;
+        if (Environment.TickCount64 - _personaMenuSeen > 5000) return;   // deliberate swap only
+        string nm = Native.Persona.GetName(id);
+        if (string.IsNullOrEmpty(nm)) return;
+        Battle.ClaimPersonaSpeech(id);
+        // The menu's closing frames still fire one panel/list announce carrying the
+        // PREVIOUS persona — mute the auto-readouts briefly so the swap is spoken
+        // once, by this line only (user 2026-08-02: "2 spammy lines").
+        _muteAutoUntil = MuteListReadsUntil = Environment.TickCount64 + 2000;
+        Log($"[PersonaNav] equipped -> {nm}");
+        Speech.Say($"{nm} equipped.", true);
+    }
+
     private void Tick()
     {
         if (!Utils.GameHasFocus()) return;   // ignore I/K/J/L while alt-tabbed
+        // ⚠ BATTLE ONLY. CurrentCommand is never cleared at battle end, so it can stay 5
+        // outside battle — this component shares I/K/J/L with the dungeon cursor.
+        if (!FieldTracker.InBattle) { _eqId = int.MinValue; return; }
+        if (Battle.CurrentCommand == 5) _personaMenuSeen = Environment.TickCount64;
+        WatchEquipChange();
         // ALLY persona panel (2026-06-10): on an ally's turn the Persona command
         // opens their single persona's panel directly (no stock submenu). The
         // ally's persona id lives in the party record at stat+0x56 (mirror
@@ -99,6 +137,7 @@ internal sealed unsafe class PersonaNav
             // Left the persona command: clear the "entered" latch so hovering the Persona
             // choice later (submenu not yet rendered) won't auto-read.
             Battle.PersonaEntered = false;
+            Battle.ResetPanelBrowse();   // panel closed — the latched index address is dead
             _lastId = int.MinValue; _row = 0; _item = -1; _panelWas = false;
             _allyRow = 0; _allyItem = -1;
             _iW = IsKeyDown(VK_I); _kW = IsKeyDown(VK_K); _jW = IsKeyDown(VK_J); _lW = IsKeyDown(VK_L);
@@ -110,11 +149,20 @@ internal sealed unsafe class PersonaNav
         // in the ring never renders the submenu, so it stays silent. I/K/J/L works anytime
         // we're on the Persona command.
         bool inPanel = Environment.TickCount64 - Battle.LastPersonaTick >= 200;
-        if (Battle.PersonaEntered && inPanel && (id != _lastId || !_panelWas))
+        // ⚠ Auto-announce only while we are genuinely inside the menu. The reader
+        // kept speaking as the menu CLOSED after a confirm and named a persona you
+        // never picked (log: "Uriel" right after "Change Personas") — PersonaEntered
+        // is cleared the moment the persona command ends, which stops that.
+        if (Battle.PersonaEntered && inPanel && (id != _lastId || !_panelWas)
+            && Environment.TickCount64 >= _muteAutoUntil
+            && Environment.TickCount64 >= MuteListReadsUntil)
         {
             if (!_panelWas) Log("[PersonaNav] panel open");
+            bool changed = id != _lastId;
             _lastId = id; _row = 0; _item = -1;
-            Announce();
+            // Only the AUTO announce takes the one-voice claim (PersonaSelect may have
+            // just spoken this same persona); I/K/J/L presses always speak.
+            if (!changed || Battle.ClaimPersonaSpeech(id)) Announce();
         }
         _lastId = id;
         _panelWas = inPanel;

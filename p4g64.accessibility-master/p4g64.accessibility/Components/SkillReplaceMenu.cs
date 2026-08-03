@@ -85,7 +85,9 @@ internal unsafe class SkillReplaceMenu : IDisposable
     private void OnRow(nint p1, nint p2, byte p3, nint menu, byte p5, float p6, float p7, int p8)
     {
         _hook!.OriginalFunction(p1, p2, p3, menu, p5, p6, p7, p8);
+        long t0 = PerfDiag.Begin();
         try { Read(menu); } catch { /* never let a hook throw */ }
+        PerfDiag.End(PerfDiag.B.SkillRepRow, t0);
     }
 
     // ── Incoming-skill NAME capture (2026-07-06, v1.4.0 bug 2) ───────────────
@@ -110,6 +112,7 @@ internal unsafe class SkillReplaceMenu : IDisposable
     private nint OnUiText(nint p1, byte p2, byte p3, uint p4, byte p5, nint p6)
     {
         nint ret = _textHook!.OriginalFunction(p1, p2, p3, p4, p5, p6);
+        long t0 = PerfDiag.Begin();
         try
         {
             if (!RecentlyActive)
@@ -121,11 +124,13 @@ internal unsafe class SkillReplaceMenu : IDisposable
             if (p6 != 0) return ret;
             string s = ReadCString(p1, 48).Trim();
             if (s.Length < 3 || s.Length > 32) return ret;
+            if (_nameToId == null) PerfDiag.Bump(PerfDiag.B.EnsureNamesLoop);
             EnsureNames();
             if (_nameToId != null && _nameToId.TryGetValue(s, out int id))
                 _drawnSkills[id] = Environment.TickCount64;
         }
         catch { /* never let a hook throw */ }
+        finally { PerfDiag.End(PerfDiag.B.SkillRepText, t0); }
         return ret;
     }
 
@@ -136,12 +141,34 @@ internal unsafe class SkillReplaceMenu : IDisposable
         for (int v = 1; v <= 1024; v++)
         {
             string nm = Skill.GetName(v);
-            if (!string.IsNullOrEmpty(nm) && nm.Length >= 3 && !nm.StartsWith("?") && !map.ContainsKey(nm))
-                map.Add(nm, v);
+            if (string.IsNullOrEmpty(nm) || nm.Length < 3 || nm.StartsWith("?")) continue;
+            if (map.TryGetValue(nm, out int prev))
+            {
+                // DUPLICATE NAME (Teddie bug 2026-07-28): "Kamui Miracle" appears ×10 in the
+                // skill table — a 9-entry dummy block (help text = the literal "Skill06D"-style
+                // placeholder) + the REAL one. First-id-wins mapped the drawn name to a dummy,
+                // so the camp panel announced the dummy as the incoming skill ("Kamui Miracle.
+                // Skill06D") instead of the true next skill. On a collision keep the id whose
+                // help text is REAL; among equals keep the first.
+                if (HasRealDesc(prev) || !HasRealDesc(v)) continue;
+                map[nm] = v;
+            }
+            else map.Add(nm, v);
         }
         if (map.Count < 300) return;                       // table not resolved yet — retry later
         _nameToId = map;
     }
+
+    /// <summary>True when the skill's help text is genuine — the table's dummy/reserved
+    /// entries carry a "Skill06D"-style placeholder (or nothing) as their description.</summary>
+    private static bool HasRealDesc(int id)
+    {
+        string d = Skill.GetDescription(id);
+        return !string.IsNullOrEmpty(d) && !IsDummyText(d);
+    }
+
+    private static bool IsDummyText(string s)
+        => System.Text.RegularExpressions.Regex.IsMatch(s.Trim(), @"^Skill[0-9A-Fa-f]{3}$");
 
     private void Read(nint menu)
     {
@@ -165,6 +192,7 @@ internal unsafe class SkillReplaceMenu : IDisposable
             int id = *(short*)(menu + 0x0A + cursor * 0xC);
             string nm = (id >= 1 && id <= 1024) ? Skill.GetName(id) : $"Skill {cursor + 1}";
             string desc = (id >= 1 && id <= 1024) ? Skill.GetDescription(id) : "";
+            if (IsDummyText(desc)) desc = "";   // never speak a "Skill06D" placeholder
             body = string.IsNullOrEmpty(desc)
                 ? $"{nm}. {cursor + 1} of {count}"
                 : $"{nm}. {desc}. {cursor + 1} of {count}";
@@ -182,6 +210,7 @@ internal unsafe class SkillReplaceMenu : IDisposable
                 string nnm = Skill.GetName(nx);
                 if (string.IsNullOrEmpty(nnm) || nnm.StartsWith("?")) return;
                 string nds = Skill.GetDescription(nx);
+                if (IsDummyText(nds)) nds = "";   // never speak a "Skill06D" placeholder
                 Speech.Say(string.IsNullOrEmpty(nds)
                     ? $"Next level skill: {nnm}."
                     : $"Next level skill: {nnm}. {nds}.", interrupt: true);
@@ -198,13 +227,24 @@ internal unsafe class SkillReplaceMenu : IDisposable
             if (!FieldTracker.IsBattleMajor(FieldTracker.CurrentMajor))
             {
                 var current = new HashSet<int>();
+                var currentNames = new HashSet<string>(StringComparer.Ordinal);
                 for (int i = 0; i < count && i < 8; i++)
-                    if (IsReadable(menu + 0x0A + i * 0xC, 2)) current.Add(*(ushort*)(menu + 0x0A + i * 0xC));
+                    if (IsReadable(menu + 0x0A + i * 0xC, 2))
+                    {
+                        int cid = *(ushort*)(menu + 0x0A + i * 0xC);
+                        current.Add(cid);
+                        // NAME set too (Teddie bug 2026-07-28): a drawn name that matches ANY
+                        // current skill can never be the incoming skill — even when the name→id
+                        // map resolves it to a same-name TWIN id not in the current set.
+                        string cnm = (cid >= 1 && cid <= 1024) ? Skill.GetName(cid) : "";
+                        if (!string.IsNullOrEmpty(cnm)) currentNames.Add(cnm);
+                    }
                 long best = 0; int bestId = 0;
                 long now = Environment.TickCount64;
                 foreach (var kv in _drawnSkills)
                 {
                     if (now - kv.Value > 20000 || current.Contains(kv.Key)) continue;
+                    if (currentNames.Contains(Skill.GetName(kv.Key))) continue;
                     // The screen ALSO draws the next-LEVEL skill's name (log
                     // 2026-07-06: "Diarama" rendered right before "Amrita" —
                     // an invisible Next-LV element), so the pool held TWO
@@ -235,36 +275,17 @@ internal unsafe class SkillReplaceMenu : IDisposable
             if (nid < 1 || nid > 1024) return;
             string nm = Skill.GetName(nid);
             string desc = Skill.GetDescription(nid);
+            if (IsDummyText(desc)) desc = "";   // never speak a "Skill06D" placeholder
             body = string.IsNullOrEmpty(desc) ? $"{nm}." : $"{nm}. {desc}.";
         }
 
         Speech.Say(body, interrupt: true);
     }
 
-    // Page-guarded C-string read (the CompendiumInfoText glyph-read pattern).
-    private static string ReadCString(nint p, int maxLen)
-    {
-        if (p == 0) return "";
-        ulong a = (ulong)p;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return "";
-        byte* qbuf = stackalloc byte[48];
-        if (VirtualQuery(p, qbuf, 48) == 0) return "";
-        if (*(uint*)(qbuf + 32) != 0x1000) return "";
-        uint protect = *(uint*)(qbuf + 36);
-        if ((protect & 0x01) != 0 || (protect & 0x100) != 0) return "";
-        nint regionBase = *(nint*)(qbuf + 0);
-        nint regionSize = *(nint*)(qbuf + 24);
-        ulong end = (ulong)regionBase + (ulong)regionSize;
-        int safe = (int)System.Math.Min((ulong)maxLen, end - a);
-        var sb = new System.Text.StringBuilder(maxLen);
-        for (int i = 0; i < safe; i++)
-        {
-            byte b = *(byte*)(p + i);
-            if (b == 0) break;
-            if (b >= 0x20 && b < 0x7F) sb.Append((char)b);
-        }
-        return sb.ToString();
-    }
+    // Guarded C-string read — RPM-based since 2026-07-27 (menu-heaviness fix): the
+    // VirtualQuery version stalled under allocator contention; RecentlyActive spans
+    // the battle persona grid too, so this paid per drawn string there.
+    private static string ReadCString(nint p, int maxLen) => Utils.ReadCStringRpm(p, maxLen);
 
     [DllImport("kernel32.dll")]
     private static extern nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);

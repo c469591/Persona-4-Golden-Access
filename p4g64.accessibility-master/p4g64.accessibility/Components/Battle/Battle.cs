@@ -580,8 +580,12 @@ internal unsafe class Battle
         // channels and misread the Suku pair as "up" (player report 2026-07-03).
         string Chan(int t, bool hiNibble)
         {
-            int timer = hiNibble ? (b[0x25 + t] >> 4) : (b[0x25 + t] & 0xF);
-            if (timer == 0) return null;                    // not active
+            // ⚠ STAGE nibble only — do NOT gate on the +0x25..+0x28 timer nibble. The timer
+            // hits 0 on the effect's LAST ACTIVE TURN while the stage stays set (BuffDiag
+            // 2026-07-29, Adachi fight: stages EE/EE/0E intact, all timers 00 → the game's
+            // UI still showed the debuffs for one more turn; the old timer gate dropped
+            // them a turn EARLY — the user's "vanishing buffs" report). The GAME clears the
+            // STAGE bytes at true expiry (same log, party buffs), so stage alone is truth.
             int stage = hiNibble ? (b[0x1C + t] >> 4) : (b[0x1C + t] & 0xF);
             if (stage == 0) return null;
             return (stage & 0x8) != 0 ? "down" : "up";
@@ -609,8 +613,10 @@ internal unsafe class Battle
         // Enemy Rebellion (crit up) uses a FIFTH channel with a different pairing:
         // stage @+0x1E HIGH nibble, timer @+0x14 HIGH nibble (dump-diffed 2026-07-03:
         // buffed +0x14=0x20/+0x1E=0x10, expired both 0, identical on the re-buff —
-        // NOT the +0x27-hi timer the +9 pattern predicts).
-        if (crit == null && (b[0x14] >> 4) != 0)
+        // NOT the +0x27-hi timer the +9 pattern predicts). Same 2026-07-29 rule: the
+        // stage nibble alone decides (its timer also reads 0 on the last active turn);
+        // +0x1E hi is only ever this channel, so no gate is needed.
+        if (crit == null)
         {
             int st = b[0x1E] >> 4;
             if (st != 0) crit = (st & 0x8) != 0 ? "down" : "up";
@@ -757,6 +763,9 @@ internal unsafe class Battle
 
     private static bool PersonaMenuLive => Environment.TickCount64 - PersonaMenuTick < 200;
 
+    /// <summary>The persona menu (list or panel) is running this frame.</summary>
+    internal static bool PersonaMenuOpen => PersonaMenuLive;
+
     /// <summary>True while the full persona DETAIL panel is open. FUN_1400edf80 is a
     /// GENERIC battle-UI container (mode flickers 0/1/2 all battle), so mode 2 alone is
     /// not enough — require the latched persona object AND that the enemy-Analyze panel
@@ -772,8 +781,215 @@ internal unsafe class Battle
     /// open the panel, the live stock cursor (*(0x141165900)+0xA30) reverts to the
     /// EQUIPPED persona, so reading it would wrongly show e.g. Izanagi after you scrolled
     /// to Pixie. Falls back to the live cursor only if no selection is published.</summary>
+    // ── FULL-PANEL browse cursor (Q/E "Switch Persona") ───────────────────────
+    // The full detail panel keeps its OWN list state — [u16 index][u16 rows][u16
+    // count] — which Q/E moves; the submenu never redraws, so LastPersonaEntry
+    // went stale and the reader kept describing the persona you arrived on
+    // (user 2026-08-02). Four static chains reach that state (heap-snapshot hunt:
+    // 4 snaps while stepping Q/E → cells counting 0,1,2,3 → pointer scan);
+    // all four resolved identically live, so we take the first that VALIDATES.
+    private static readonly (nint stat, int off)[] PanelCursorChains =
+    {
+        (unchecked((nint)0x140EC3698L), 0x1F84), (unchecked((nint)0x140EC3E58L), 0x1AA4),
+        (unchecked((nint)0x140EC4618L), 0x1284), (unchecked((nint)0x141165798L), 0x1F38),
+    };
+
+    /// <summary>Registered MC stock entries in slot order (empty slots skipped).</summary>
+    private static List<nint> RegisteredStock()
+    {
+        var list = new List<nint>(12);
+        nint g = unchecked((nint)0x141165900L);
+        if (!IsReadable(g, 8)) return list;
+        nint baseObj = *(nint*)g;
+        if (baseObj == 0) return list;
+        for (int i = 0; i < 12; i++)
+        {
+            nint e = baseObj + 0xA34 + i * 0x30;
+            if (IsReadable(e, 0x30) && *(byte*)e != 0) list.Add(e);
+        }
+        return list;
+    }
+
+    // The exact OFFSET of that state is per-allocation — hardcoding the four
+    // offsets worked in the hunt battle and missed in the next one (user
+    // 2026-08-02). So we LATCH it at panel-open time instead: the panel always
+    // opens on the persona the submenu had highlighted, which gives an anchor
+    // index; we scan the menu allocation for the state triple
+    // [u16 index == anchor][u16 rows 1..12][u16 count == stock count] and
+    // remember that address while the panel stays open.
+    private static volatile nint _panelIdxAddr;
+    private static int _panelIdxStock;
+
+    // The panel's list is ROTATED relative to the stock-slot order (live-proven
+    // 2026-08-02: panel opened on id 160 = our slot 9 while its index read 8). The
+    // shift isn't guessable, so we MEASURE it: the panel always opens on the persona
+    // the submenu had highlighted, which pins index ↔ slot exactly once per opening.
+    private static volatile int _panelDelta = int.MinValue;
+    private static int _panelDeltaLogged = int.MinValue;
+
+    /// <summary>Drop the latched panel state (leaving the persona command / back in
+    /// the list) so the next opening re-measures the rotation.</summary>
+    internal static void ResetPanelBrowse() { _panelIdxAddr = 0; _panelIdxStock = 0; _panelDelta = int.MinValue; }
+
+    // ── One-voice rule for persona announcements (2026-08-02) ────────────────
+    // Switching persona with Q/E in the full panel re-renders the submenu row TOO,
+    // so PersonaSelect and PersonaNav both announced the same change milliseconds
+    // apart — each with interrupt, so they cancelled each other and the user heard
+    // NOTHING (log-proven: "[PersonaSelect] Kingu, level 63" immediately followed by
+    // "[PersonaNav] row 0: Kingu, Aeon, level 63"). Whoever speaks first claims the
+    // persona for a moment; the other stays silent.
+    private static volatile int _spokenPersonaId = -1;
+    private static long _spokenPersonaTick;
+
+    /// <summary>True if this persona may be announced now (and claims it).</summary>
+    internal static bool ClaimPersonaSpeech(int id)
+    {
+        long now = Environment.TickCount64;
+        if (id == _spokenPersonaId && now - _spokenPersonaTick < 600) return false;
+        _spokenPersonaId = id; _spokenPersonaTick = now;
+        return true;
+    }
+
+    /// <summary>Fallback for <see cref="PersonaPanelBrowseEntry"/>: re-find the panel's
+    /// list state by SHAPE — [u16 idx == anchor][u16 rows 1..12][u16 count == stock count]
+    /// — if it ever stops living at <see cref="PanelStateOff"/>.</summary>
+    private static nint FindPanelIndexAddr(int anchorIdx, int stockCount)
+    {
+        var buf = new byte[0x5000];
+        foreach (var (st, _) in PanelCursorChains)
+        {
+            if (!IsReadable(st, 8)) continue;
+            nint obj = *(nint*)st;
+            if (obj == 0) continue;
+            nint start = obj - 0x1000;
+            fixed (byte* pb = buf)
+            {
+                if (!Utils.TryReadRaw(start, pb, buf.Length)) continue;
+                for (int o = 0; o + 6 <= buf.Length; o += 2)
+                {
+                    if (BitConverter.ToUInt16(buf, o) != anchorIdx) continue;
+                    int rows = BitConverter.ToUInt16(buf, o + 2);
+                    if (rows < 1 || rows > 12) continue;
+                    if (BitConverter.ToUInt16(buf, o + 4) != stockCount) continue;
+                    return start + o;
+                }
+            }
+        }
+        return 0;
+    }
+
+    /// <summary>The stock entry the FULL PANEL is currently showing, or 0. Latches the
+    /// panel's own index field on first use (anchored to the submenu selection) and
+    /// re-validates every read; any mismatch drops the latch and the caller falls back
+    /// to the submenu selection (no regression).</summary>
+    // ★ THE PANEL'S LIST STATE — live-found 2026-08-02 (in-mod candidate scan around
+    // the LIVE menu object while the user stepped Q/E; the value walked 1→2→3 with the
+    // presses): **PersonaMenuObj + 0x93C = [u16 index][u16 rows][u16 count]**.
+    // (An earlier attempt hardcoded static→offset chains found in ONE session's heap;
+    // they pointed at nothing in the next battle — never hardcode a heap layout.)
+    private const int PanelStateOff = 0x93C;
+
+    internal static nint PersonaPanelBrowseEntry()
+    {
+        var stock = RegisteredStock();
+        if (stock.Count == 0) return 0;
+
+        nint menu = PersonaMenuObj;
+        if (menu != 0 && IsReadable(menu + PanelStateOff, 6))
+        {
+            int idx = *(ushort*)(menu + PanelStateOff);
+            int cnt = *(ushort*)(menu + PanelStateOff + 4);
+            if (cnt == stock.Count && idx >= 0 && idx < stock.Count)
+            {
+                if (_panelDelta == int.MinValue)
+                {
+                    // Calibrate on the persona the panel opened with.
+                    if (LastPersonaId < 0) return 0;
+                    int a = -1;
+                    for (int i = 0; i < stock.Count; i++)
+                        if (IsReadable(stock[i], 0x30) && *(short*)(stock[i] + 2) == LastPersonaId) { a = i; break; }
+                    if (a < 0) return 0;
+                    int nd = ((a - idx) % cnt + cnt) % cnt;
+                    if (nd != _panelDeltaLogged) { _panelDeltaLogged = nd; Log($"[PersonaNav] panel rotation: idx {idx} = slot {a} (delta {nd})"); }
+                    _panelDelta = nd;
+                }
+                return stock[(idx + _panelDelta) % cnt];
+            }
+        }
+
+        // Fallback: the offset moved — re-find it by shape, anchored on the submenu
+        // selection (the persona the panel opened on), and latch that address.
+        if (_panelIdxAddr != 0 && _panelIdxStock == stock.Count && IsReadable(_panelIdxAddr, 6))
+        {
+            int i = *(ushort*)_panelIdxAddr;
+            int c = *(ushort*)(_panelIdxAddr + 4);
+            if (c == stock.Count && i >= 0 && i < stock.Count) return stock[i];
+            _panelIdxAddr = 0;
+        }
+        if (LastPersonaId < 0) return 0;
+        int anchor = -1;
+        for (int i = 0; i < stock.Count; i++)
+            if (IsReadable(stock[i], 0x30) && *(short*)(stock[i] + 2) == LastPersonaId) { anchor = i; break; }
+        if (anchor < 0) return 0;
+        nint addr = FindPanelIndexAddr(anchor, stock.Count);
+        if (addr == 0) return 0;
+        _panelIdxAddr = addr; _panelIdxStock = stock.Count;
+        Log($"[PersonaNav] panel index re-latched @0x{addr:X} (menu+0x{addr - menu:X})");
+        return stock[anchor];
+    }
+
+    /// <summary>The MC's EQUIPPED persona entry: the live stock cursor
+    /// (*(0x141165900)+0xA30) tracks it (it snaps back to the equipped persona
+    /// whenever the panel opens — the 2026-07-11 note, re-proven 2026-08-02).
+    /// ⚠ unit+0xA4 is NOT this (it read 1/"Izanagi" for every persona).</summary>
+    internal static nint EquippedStockEntry()
+    {
+        nint g = unchecked((nint)0x141165900L);
+        if (!IsReadable(g, 8)) return 0;
+        nint baseObj = *(nint*)g;
+        if (baseObj == 0 || !IsReadable(baseObj + 0xA30, 2)) return 0;
+        int cur = *(short*)(baseObj + 0xA30);
+        if (cur < 0 || cur >= 12) return 0;
+        nint e = baseObj + 0xA34 + cur * 0x30;
+        return IsReadable(e, 0x30) && *(byte*)e != 0 ? e : 0;
+    }
+
     internal static (nint entry, int id) PersonaCursor()
     {
+        // PRIORITY (rebuilt 2026-08-02 from live logs — read this before changing it):
+        //  1. The SUBMENU is drawing → the highlighted row is the truth (list browsing).
+        //  2. Else, we are INSIDE the persona menu (PersonaEntered, i.e. the submenu
+        //     rendered at least once since entering) → the PANEL's own browse cursor,
+        //     which Q/E moves without redrawing the submenu.
+        //  3. Else → whatever is EQUIPPED. This covers hovering the Persona command
+        //     and every read after a confirmed change (the stock array reorders, so
+        //     the remembered row is meaningless then — the "reads the old persona"
+        //     report). ⚠ Do NOT gate on PersonaMenuLive: that heartbeat runs for the
+        //     whole battle, so it never meant "menu open".
+        bool submenuDrawing = Environment.TickCount64 - LastPersonaTick < 200;
+        if (!submenuDrawing)
+        {
+            if (PersonaEntered)
+            {
+                nint pe = PersonaPanelBrowseEntry();
+                if (pe != 0 && IsReadable(pe, 0x30)) return (pe, *(short*)(pe + 2));
+            }
+            else
+            {
+                if (_panelDelta != int.MinValue) _panelDelta = int.MinValue;
+                // ⚠ IN BATTLE ONLY. CurrentCommand is never reset when a battle ends, so
+                // it can sit at 5 (Persona) forever; PersonaNav's only guard was that this
+                // returned nothing outside battle. Without this gate the equipped entry
+                // resolves everywhere and I/K/J/L — the DUNGEON CURSOR keys — would speak
+                // persona rows while navigating (regression caught 2026-08-02).
+                if (FieldTracker.InBattle)
+                {
+                    nint eq = EquippedStockEntry();
+                    if (eq != 0) return (eq, *(short*)(eq + 2));
+                }
+            }
+        }
+        else if (_panelDelta != int.MinValue) _panelDelta = int.MinValue;
         if (IsReadable(LastPersonaEntry, 0x30) && LastPersonaId >= 0)
         {
             // The stock array REORDERS when a persona change is CONFIRMED (the

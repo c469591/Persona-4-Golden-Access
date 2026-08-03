@@ -80,6 +80,16 @@ internal unsafe class MessageBubble
     {
         string s = t.Trim();
         if (Battle.IsCommandName(s)) return true;
+        // "Change Personas" duplicates our own "<name> equipped." line (user
+        // 2026-08-02: the swap was announced three times over). It is also the
+        // EARLIEST confirm signal — the menu's closing frames fire one more
+        // list/panel readout carrying the PREVIOUS persona before the equipped
+        // change is detectable, so start the mute right here.
+        if (s.Equals("Change Personas", StringComparison.OrdinalIgnoreCase))
+        {
+            PersonaNav.MuteListReadsUntil = Environment.TickCount64 + 2500;
+            return true;
+        }
 
         long now = Environment.TickCount64;
         if (Battle.PendingEchoSkillId > 0 && now - Battle.PendingEchoSkillTick < 10000)

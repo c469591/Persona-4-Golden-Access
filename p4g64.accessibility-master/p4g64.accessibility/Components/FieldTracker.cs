@@ -654,12 +654,17 @@ internal unsafe class FieldTracker
 
 
     // Legacy spawn-point accessor (sub_obj+0x20/+0x24). Static — does NOT update while walking.
+    // ⚠ CRASH FIX 2026-07-28 (dump P4G.exe.57608, 07-25): these two were the LAST unguarded
+    // final derefs in the position stack — EnemyRadar's poll read LivePlayerZ during the
+    // TV-entrance→Velvet-Room transition (major 20→8 flips to the 2D path mid-free), Live and
+    // AsmHook fell through to Chain, and sub+0x24 was freed → uncatchable AVE. Every sibling
+    // accessor already guarded its final read; these now match.
     private static unsafe float PlayerX2DChain
     {
         get
         {
             var (sub, ok) = GetSubObjPtr();
-            if (!ok) return float.NaN;
+            if (!ok || !IsReadable(sub + 0x20, 4)) return float.NaN;
             float x = *(float*)((byte*)sub + 0x20);
             return (float.IsNaN(x) || float.IsInfinity(x) || x == 0f) ? float.NaN : x;
         }
@@ -670,7 +675,7 @@ internal unsafe class FieldTracker
         get
         {
             var (sub, ok) = GetSubObjPtr();
-            if (!ok) return float.NaN;
+            if (!ok || !IsReadable(sub + 0x24, 4)) return float.NaN;
             float z = *(float*)((byte*)sub + 0x24);
             return (float.IsNaN(z) || float.IsInfinity(z)) ? float.NaN : z;
         }
@@ -829,6 +834,14 @@ internal unsafe class FieldTracker
             if (CurrentMajor >= 20)
             {
                 float x = PlayerX3DViaSub; if (!float.IsNaN(x)) return x;
+                // WORLD chain BEFORE the AsmHook capture (reordered 2026-07-30): on scripted
+                // arenas the 3D AsmHook storage can hold a NON-NaN LIE — Magatsu 29/2 returned
+                // a frozen (0.005, 2.74) cutscene-actor transform, so marks/steps froze and the
+                // 2026-07-27 world fallback was never reached. The world party chain is now
+                // live-proven TRUE on every broken floor (Hollow lobby 31/1, Heaven 28/2 via
+                // the drop walk, Magatsu 29/2 vs the master-table person markers); normal
+                // floors never get here (ViaSub is primary), so only broken floors change.
+                var (wx, _, _, wok) = WorldPlayerPos(); if (wok) return wx;
                 x = PlayerX3D;             if (!float.IsNaN(x)) return x;
                 return float.NaN;
             }
@@ -845,6 +858,8 @@ internal unsafe class FieldTracker
             if (CurrentMajor >= 20)
             {
                 float z = PlayerZ3DViaSub; if (!float.IsNaN(z)) return z;
+                // Same world-before-AsmHook order as PlayerX (2026-07-30, Magatsu 29/2 lie).
+                var (_, _, wz, wok) = WorldPlayerPos(); if (wok) return wz;
                 z = PlayerZ3D;             if (!float.IsNaN(z)) return z;
                 return float.NaN;
             }
@@ -1377,6 +1392,51 @@ internal unsafe class FieldTracker
     /// The result is spoken from the detour when it completes (~1 frame later).</summary>
     public static void RequestCardinalProbe() => _probePending = true;
 
+    // ── H-cursor TIEBREAK probe (2026-08-02): ONE segment, near-player only ────
+    // Used solely to distinguish "real wall" from "open frontier" when the grid is
+    // ambiguous (target unexplored + edge closed). ⚠ Only meaningful while the
+    // segment lies inside the collision scene's culled radius around the player —
+    // the CALLER enforces the distance gate. Full-span bidirectional thin march
+    // (both lessons from the CurDiag captures baked in).
+    private static volatile bool _segPending, _segDone, _segBlocked;
+    private static float _segFX, _segFZ, _segDX, _segDZ, _segSpan;
+
+    public static void RequestCursorSegProbe(float fromX, float fromZ, float dx, float dz, float span)
+    {
+        _segFX = fromX; _segFZ = fromZ; _segDX = dx; _segDZ = dz; _segSpan = span;
+        _segDone = false;
+        _segPending = true;
+    }
+
+    /// <summary>True once the probe ran; blocked = a wall anywhere on the segment.</summary>
+    public static bool TryGetCursorSegProbe(out bool blocked)
+    {
+        blocked = _segBlocked;
+        return _segDone;
+    }
+
+    private static void RunCursorSegProbe()
+    {
+        _segBlocked = false;
+        if (TryGetCollisionScene(out nint scene))
+        {
+            float py = LivePlayerY;
+            if (!float.IsNaN(py))
+            {
+                // One-way march ONLY, from the caller's start point (the player's
+                // body — open space, scene loaded). The reverse march is gone: it
+                // started at a cell center that can sit INSIDE geometry, which made
+                // solid squares read "clear" (2026-08-02 captures).
+                float maxD = _segSpan * 0.9f, step = RThin * 1.6f;
+                for (float d = RThin; d <= maxD && !_segBlocked; d += step)
+                    if (SweepSceneRaw(scene, _segFX + _segDX * d, py, _segFZ + _segDZ * d,
+                            _segDX, 0f, _segDZ, RThin, out _, out _, out _))
+                        _segBlocked = true;
+            }
+        }
+        _segDone = true;
+    }
+
     /// <summary>The per-frame movement tick (FUN_1402D53A0). Call the game's own
     /// tick FIRST — that leaves the collision scene consistent — then, only if a
     /// probe was requested, run our collision query right here on the game thread,
@@ -1389,6 +1449,12 @@ internal unsafe class FieldTracker
             _probePending = false;
             try { RunCardinalProbe(); }
             catch (Exception e) { Log($"[Collision] probe error: {e.Message}"); }
+        }
+        if (_segPending)
+        {
+            _segPending = false;
+            try { RunCursorSegProbe(); }
+            catch (Exception e) { Log($"[SegProbe] error: {e.Message}"); _segDone = true; }
         }
         if (_wallSenseOn)
         {
@@ -5838,6 +5904,11 @@ internal unsafe class FieldTracker
         // (61_2 = Bath #3, 61_3 = next scripted/boss — both can have an empty banner → were "???").
         // 240/241 = battle majors, handled before this switch.
         24 or 41 or 61 => "Steamy Bathhouse",
+        // Dungeon 7 = Magatsu Inaba (live 2026-07-24): entrance = (21,1) "Desolate Bedroom"
+        // (banner scans a stale "Yukiko's Castle, Gate"), maze = 46, scripted = 66 — the maze/
+        // scripted floors show plainly "Magatsu Inaba" on screen (no floor number). Must precede
+        // the >= 60 catch-all below (66 sits inside it). Entrance name is a _floorNameOverrides key.
+        21 or 46 or 66 => "Magatsu Inaba",
         >= 60 and <= 69 => "???",   // scripted/event floors show "???" on screen when they have no banner
         _ => GetDungeonAreaName(major, minor),
     };
@@ -5912,6 +5983,21 @@ internal unsafe class FieldTracker
                                                  // first visit leaked a stale Yukiko banner → "???" without it
         [(28, 1)] = "Heaven, Pearly Gates",      // on-screen name (user screenshot 2026-07-11, floor id 100);
                                                  // same stale-Yukiko-banner leak on first entry without it
+        [(21, 1)] = "Desolate Bedroom",          // Magatsu Inaba ENTRANCE (user screenshot 2026-07-24, floor
+                                                 // id 120 = base); its banner scans a stale "Yukiko's Castle,
+                                                 // Gate" → would be "???" without this override.
+        [(31, 1)] = "Grave of Hollow Memories",  // Hollow Forest ENTRANCE/lobby (user screenshot + live read
+                                                 // 2026-07-27, floor id 160 = base).
+        [(30, 2)] = "Ashihara Nakatsu",          // FINAL DUNGEON entrance (2026-08-03, live: major 30 minor 2,
+                                                 // floor id 140 = base 8 — the slot that sat as "???" since the
+                                                 // id spaces were mapped). Name from the game's own string
+                                                 // table @0x930C68, matching the on-screen banner.
+        // Major 22 = the game's FIRST dungeon area (April tutorial; revisited in the December
+        // Magatsu entry). Both minors' banners exist but the anti-leak rule rejects them (major 22
+        // is unmapped), so both read "???" (user screenshots + log 2026-07-30). Banner-draw timing
+        // in the log: the store's banner drew on ENTERING minor 2 → street = 1, store = 2.
+        [(22, 1)] = "Twisted Shopping District", // the street outside Konishi Liquors
+        [(22, 2)] = "Former Konishi Liquors",    // the store interior (the December elevator is here)
     };
 
     /// <summary>
@@ -5928,11 +6014,27 @@ internal unsafe class FieldTracker
     // heap-scan as the primary floor namer — the banner path mis-read floors
     // right after battles (stale banners linger; user 2026-07-06).
     private static readonly nint FloorIdSingleton = unchecked((nint)0x15E438348L);
-    private static readonly int[] FloorIdBases = { 5, 20, 40, 60, 80, 100, 120 };
+    // Base 140 = the still-unvisited dungeon between Magatsu and the Hollow Forest (its fd030
+    // script has 19 "Path" floors = ids 141-159, butting exactly against 160) — a PLACEHOLDER
+    // slot: no major maps to did 8 yet (spoiler rule), so the value is never read.
+    // Base 160 = Hollow Forest (live 2026-07-27: lobby 31/1 = id 160, floor 1 = 69/4 = id 161).
+    private static readonly int[] FloorIdBases = { 5, 20, 40, 60, 80, 100, 120, 140, 160 };
     private static readonly string[] DungeonDisplayNames =
     {
         "Yukiko's Castle", "Steamy Bathhouse", "Marukyu Striptease", "Void Quest",
-        "Secret Laboratory", "Heaven", "Magatsu Inaba",
+        "Secret Laboratory", "Heaven", "Magatsu Inaba", "Yomotsu Hirasaka", "Hollow Forest",
+    };
+
+    // Hollow Forest floor names (dungeon 9, base 160): every floor has a UNIQUE on-screen name,
+    // index = floor number (id − 160). Order from the game's own portal menu in fd031_001.msg
+    // (read bottom-up: the list renders deepest-first), floor 1 confirmed on screen 2026-07-27
+    // (user screenshot "Memories of Parting" at id 161). [0] unused (floor 0 = the lobby).
+    private static readonly string[] HollowForestFloorNames =
+    {
+        "", "Memories of Parting", "Memories of Pain", "Memories of Grief",
+        "Memories of Sorrow", "Memories of Love", "Memories of Suffering",
+        "Memories of Anger", "Memories of Loneliness", "Memories of Invitation",
+        "Memories of Meeting",
     };
 
     internal static unsafe int DungeonFloorId()
@@ -5963,6 +6065,11 @@ internal unsafe class FieldTracker
         >= 60 and <= 63 => major - 59,
         64 => 6,                         // Heaven scripted floors (swapped with Secret Lab)
         65 => 5,                         // Secret Laboratory scripted floors
+        66 => 7,                         // Magatsu Inaba scripted floors (live 2026-07-24, floor id 122)
+        69 => 9,                         // Hollow Forest floors (live 2026-07-27: floor 1 = 69/4, id 161).
+                                         // Its floors are FIXED scripted layouts (fd067-fd069 scripts);
+                                         // majors 67/68 may hold other floors — map them only when SEEN.
+                                         // The lobby (31/1, id 160) maps via the 23-32 gate formula below.
         // Procedural maze blocks. The +1-per-dungeon rule holds for 40 Yukiko /
         // 41 Bathhouse / 42 Marukyu / 43 Void Quest — then dungeons 5/6 have their
         // majors SWAPPED: Secret Lab maze = 45 (live 2026-07-10, floor id 81 = B1F)
@@ -5971,6 +6078,7 @@ internal unsafe class FieldTracker
         >= 40 and <= 43 => major - 39,
         44 => 6,                         // Heaven maze (swapped with Secret Lab)
         45 => 5,                         // Secret Laboratory maze
+        46 => 7,                         // Magatsu Inaba maze (live 2026-07-24, floor id 121; 40+6 by rule)
         >= 23 and <= 32 => major - 22,   // gate/entrance blocks (scripted sub-floors live here too)
         _ => 0,
     };
@@ -5986,6 +6094,15 @@ internal unsafe class FieldTracker
     {
         name = "";
         int did = DungeonIndexOf(major);
+        // ★ ID-INFERRED FALLBACK (2026-08-03): Hollow Forest's floors sit on SEVERAL
+        // majors (only 69 was ever mapped, so floors 2/3/5… stayed nameless while
+        // floor 4 read fine — user, mid-playthrough). Each dungeon owns an exclusive
+        // floor-id space, so id 161-170 can ONLY be Hollow Forest whatever major the
+        // game uses. Inferring from the ID is also SPOILER-SAFE by construction: the
+        // id exists only while you are standing on that floor. Scoped to dungeon 9 —
+        // do NOT generalise to the base-140 placeholder (an unvisited dungeon).
+        if (did < 1 && id >= 141 && id <= 159) did = 8;   // Yomotsu Hirasaka paths
+        if (did < 1 && id >= 161 && id <= 170) did = 9;   // Hollow Forest floors
         if (did < 1 || did > FloorIdBases.Length) return false;
         int floor = id - FloorIdBases[did - 1];
         if (floor < 1 || floor > 29) return false;
@@ -5997,6 +6114,22 @@ internal unsafe class FieldTracker
             4 => $"Void Quest Chapter {floor}",
             5 => $"Secret Laboratory B{floor}F",   // basement floors (on-screen "Secret Laboratory B1F", 2026-07-10)
             6 => $"Heaven, Paradise number {floor}", // on-screen "Heaven, Paradise #1" (2026-07-11); "#" spoken as "number" (the Bath #N precedent)
+            // Dungeon 7 = Magatsu, ONE floor-id space (base 120) spanning TWO on-screen sections that
+            // share majors 21/29/46/66 (live 2026-07-24, user-confirmed full layout): 3 "Magatsu Inaba"
+            // floors = id 121, 122, and the FINAL boss floor id 129 (major 29); 6 "Magatsu Mandala World
+            // {n}" floors = id 123-128 (World 1 = id 123). So ONLY 123-128 are Mandala; everything else in
+            // range (incl. the id-129 boss floor that loops back to the base name) = "Magatsu Inaba".
+            // Entrance id 120 = "Desolate Bedroom" via its _floorNameOverrides key.
+            7 => (id >= 123 && id <= 128) ? $"Magatsu Mandala World {id - 122}" : "Magatsu Inaba",
+            // Dungeon 8 = YOMOTSU HIRASAKA, the FINAL dungeon (2026-08-03, live: entrance
+            // major 30 minor 2 = floor id 140 = base). 19 floors, on-screen "Yomotsu Hirasaka
+            // Path 1..19" (the game's own strings @0x930C98+; its portal menu lists "Continue
+            // from Path N", fd030_001.msg). Entrance id 140 = "Ashihara Nakatsu" via its
+            // _floorNameOverrides key.
+            8 when floor <= 19 => $"Yomotsu Hirasaka, Path {floor}",
+            // Dungeon 9 = Hollow Forest: 10 fixed floors, each with a unique on-screen
+            // "Memories of ___" name (no dungeon prefix, no floor number on screen).
+            9 when floor <= 10 => HollowForestFloorNames[floor],
             _ => $"{DungeonDisplayNames[did - 1]}, floor {floor}",
         };
         return true;
@@ -6190,6 +6323,20 @@ internal unsafe class FieldTracker
         if (gd <= 0) return (0, 0);
         var date = _epoch.AddDays(gd + plusDays);
         return (date.Month, date.Day);
+    }
+
+    /// <summary>One Weather News forecast card as speech: "Saturday, February 4. Cloudy."
+    /// for today+plusDays, from the epoch date math + the validated weather schedule
+    /// (the panel's icons are baked art — our own data replaces them; 2026-07-30).</summary>
+    internal static string ForecastLine(int plusDays)
+    {
+        int gd = _gameDayStatic;
+        if (gd <= 0) return "";
+        var date = _epoch.AddDays(gd + plusDays);
+        string w = WeatherFromSheet(gd + plusDays);
+        return string.IsNullOrEmpty(w)
+            ? $"{date.DayOfWeek}, {date:MMMM d}."
+            : $"{date.DayOfWeek}, {date:MMMM d}. {w}.";
     }
 
     private static string FormatDate(short gameDay)

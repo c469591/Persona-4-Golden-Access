@@ -735,8 +735,10 @@ internal unsafe class VelvetFusion : IDisposable
     {
         if (!_fired) { _fired = true; Log($"[VelvetFusion] fusion dispatcher FIRED (obj=0x{(ulong)obj:X})."); }
         _hook!.OriginalFunction(param_1, obj);
+        long t0 = PerfDiag.Begin();
         try { Read(obj); } catch { }
         try { PollMoney(); } catch { }
+        PerfDiag.End(PerfDiag.B.VelvetDispatch, t0);
     }
 
     // FUN_140234B20(facObj) draws the skill-inheritance screen every frame it's up.
@@ -1600,16 +1602,14 @@ internal unsafe class VelvetFusion : IDisposable
         return hex.Append('|').Append(asc).ToString();
     }
 
-    [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "VirtualQuery")]
-    private static extern nint VQ(nint a, byte* b, nint l);
+    // RPM probe since 2026-07-27 (menu-heaviness fix): the VirtualQuery version stalled
+    // ~ms per call under allocator contention, and this runs DOZENS of times per frame
+    // in the dispatch hook — THE velvet fusion cursor weight (PerfDiag: 6ms/dispatch).
+    // Same semantics as before (page-of-a readable); RPM validates without the VAD walk.
     private static bool IsReadable(nint a)
     {
-        if (a < 0x10000) return false;
-        byte* buf = stackalloc byte[48];
-        if (VQ(a, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;   // MEM_COMMIT
-        uint p = *(uint*)(buf + 36);                       // Protect
-        return (p & 0x01) == 0 && (p & 0x100) == 0;        // not NOACCESS / not GUARD
+        byte t;
+        return Utils.TryReadRaw(a, &t, 1);
     }
 
     public void Dispose() { }

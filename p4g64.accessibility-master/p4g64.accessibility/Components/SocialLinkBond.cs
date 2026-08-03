@@ -68,14 +68,34 @@ internal sealed unsafe class SocialLinkBond
         if (work == 0 || !IsReadable(work, 0x28)) return;
 
         int f1C = *(int*)(work + 0x1C);
-        int f20 = *(int*)(work + 0x20);   // 0 = FIRST-ESTABLISHMENT poem; 10 = MAX poem; 2..9 = mid-rank banner
-        // Only the two POEM screens speak: establishment (f20 == 0, "new bond")
-        // and MAX (f20 == 10, "genuine bond… ultimate form" — live-verified
-        // 2026-07-09: work+0x1C=7/Magician, work+0x20=10). Mid-rank rank-ups
-        // (f20 == the new rank 2..9) run this same task for the "Rank up!!" banner,
-        // no poem — stay silent (SocialLinkRankUp handles those).
-        if (f20 != 0 && f20 != 10) return;
+        int f20 = *(int*)(work + 0x20);   // 0 = FIRST-ESTABLISHMENT poem; 10 = MAX poem; 2..9 = mid-rank banner;
+                                          // 11..14 = special sequence kinds (decompile FUN_1401C14B0: each has
+                                          // its own poem sound cue 0x5DD/0x5DE/0x5FC — in P4G the only one that
+                                          // ever fires is the ARCANA CHANGE overlay, Jester→Hunger).
+        // Only the POEM screens speak: establishment (f20 == 0, "new bond"),
+        // MAX (f20 == 10, "genuine bond… ultimate form" — live-verified
+        // 2026-07-09: work+0x1C=7/Magician, work+0x20=10), and the ARCANA-CHANGE
+        // poem (f20 > 10, gated below on the row actually being Adachi's
+        // Jester/Hunger family so a leftover sequence kind can never misfire).
+        // Mid-rank rank-ups (f20 == the new rank 2..9) run this same task for the
+        // "Rank up!!" banner, no poem — stay silent (SocialLinkRankUp handles those).
+        bool change = f20 == 13;   // LIVE-VERIFIED 2026-08-02: the change overlay ran f20=13
+                                   // (f1C=31 Adachi, arcanaByte=25 — flips to 26 after)
+        if (f20 != 0 && f20 != 10 && !change) return;
         if (_wasUp) return;
+        if (change)
+        {
+            // SPOILER-SAFE by construction: this can only fire while the game
+            // itself shows the transformation overlay (the task + kind exist
+            // only then), and only for the Jester/Hunger commu row.
+            int ab = ReadArcana(f1C);
+            if (ab != 25 && ab != 26) { Log($"[SLBond] change-kind f20={f20} f1C={f1C} arcanaByte={ab} — not Jester/Hunger, silent"); return; }
+            _wasUp = true;
+            string t = BuildChange();
+            Log($"[SLBond] f1C={f1C} f20={f20} arcanaByte={ab} say: {t}");
+            Speech.Say(t, true);
+            return;
+        }
 
         // MAX poem timing (user 2026-07-09): this task appears BEFORE the "Rank up!!"
         // banner, so speaking on sight both stomps the rank-up screen AND double-fires.
@@ -107,6 +127,16 @@ internal sealed unsafe class SocialLinkBond
         if (arcana.Length > 0) sb.Append(" of the ").Append(arcana).Append(" Arcana");
         sb.Append('.');
         return sb.ToString();
+    }
+
+    /// <summary>The ARCANA-CHANGE poem — the game's own official text
+    /// (MSG_CMM_RANKUP_CHANGE in data_e/event_data/community.bin, dialog 61).
+    /// The names it speaks are exactly what the overlay shows at that moment.</summary>
+    private static string BuildChange()
+    {
+        return "Thou art I, and I am thou. Thou hast seen how bonds may change. " +
+               "The bond that hath changed, it is thy first step in learning the truth. " +
+               "Thou must bear thine inner power of The Jester becoming Hunger.";
     }
 
     private static string BuildMax(string arcana)

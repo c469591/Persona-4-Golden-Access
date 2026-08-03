@@ -29,8 +29,10 @@ is hoisted (`TryGetCollisionScene` once → raw calls ≈ free; 100+ calls/scan 
 - **All probes are THIN (r=20)** and march outward (`CoarseDistScene`).
   Sides use `SideDistScene`: up to 3 PARALLEL thin rays (base points ±30u along
   the axis, each shift clamped by the measured ahead/behind clearance).
-- Consumers: the WALL HUM (N, camera-relative, ~5.5Hz scan) + the spoken **B**
-  readout, and the walker's travel-relative `RunWalkProbe` (~12Hz).
+- Consumers: the WALL HUM (N kbd / LT+RT+Y pad, camera-relative, ~5.5Hz scan) and
+  the walker's travel-relative `RunWalkProbe` (~12Hz). (The spoken **B** cardinal
+  readout was UNBOUND 2026-07-19 with the settings menu — `RequestCardinalProbe`
+  remains as unused machinery.)
 - The minimap-grid boundary sense (`GridWallDist`, edge-bit march) is a SECOND,
   INDEPENDENT source (Heaven-style open edges collision can't see). The two are
   additive and never gate each other.
@@ -142,8 +144,8 @@ can always be killed in ≤50ms.
   `stall at start wp0 — skipping` / `door @(x,z) — opening` / `door: opened` /
   `door open done — crossing via waypoints` / `{tag} reroute #N around (r,c)` /
   `reroute #N failed … retreating Nms` / `replanned after retreat` / `give-up at
-  wpN` / `stop: Battle.` / arrival lines per kind. **B** key = one
-  `[Collision] cardinals` line.
+  wpN` / `stop: Battle.` / arrival lines per kind. (The old **B**-key
+  `[Collision] cardinals` line is gone — B was unbound 2026-07-19.)
 - Key code: `AutoWalker.cs` (`DriveRoute`, `WalkTarget`, `WalkToShadowV2`,
   `StairsBody`, `OpenDoorAt`, `TryStallDoor`, `BendFlags`, `Steerer`),
   `StairsPlan.cs` (`TryPlanTo`), `GridWalk.cs` (connectivity + A*),

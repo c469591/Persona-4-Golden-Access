@@ -341,12 +341,60 @@ internal class DungeonCursor
             return;
         }
         // Boundary cells (flag 2) are walls — the cursor can't enter them.
-        if (MinimapTracker.ReadCell(nr, nc, out var cell) && cell.Flag == 2)
+        bool cellKnown = MinimapTracker.ReadCell(nr, nc, out var cell);
+        if (cellKnown && cell.Flag == 2)
         {
             WinBeep(360, 70);
             Speech.Say("Wall.", true);
             Log($"[DungeonCursor] {dir} BLOCKED wall cell=({nr},{nc})");
             return;
+        }
+
+        // ── HONEST GATE v2 (2026-08-02, Look mode only — a physical Walk step bumps
+        // on the real sensor by itself). The verdict comes from the minimap grid's
+        // OWN passage model — edge bits + roomIds via GridWalk.Connected, the exact
+        // test the auto-walk planner traces whole floors with. NOT the collision
+        // sensor: the collision scene is DISTANCE-CULLED around the player, so far
+        // cells probed all-clear (CurDiag capture, B6F). NOT the cell flag alone:
+        // that was the original lie (walls read as floor). Doors stay browsable; an
+        // open passage into unexplored map stops with "Unexplored" (user call);
+        // everything else that refuses connection is a wall.
+        if (_mode == SubMode.Look && !DoorInCell(nr, nc)
+            && MinimapTracker.ReadCell(_row, _col, out var curCell) && curCell.Flag != 0)
+        {
+            // TWO-SIDED edge check (2026-08-02): the passage bit can live on EITHER
+            // of the two neighbor cells — the near-side-only check called one-sided
+            // openings "Wall" (Void Quest north). Open on either side (or same room)
+            // = connected. The collision-sensor tiebreak is GONE — it lied both ways
+            // (culled scene far away, buried cell centers near). Grid rim semantics:
+            // explored cell → unexplored with NO bit on either side = the room's
+            // drawn wall rim → "Wall"; an OPEN bit into fog = genuine "Unexplored".
+            bool openEdge = AutoWalk.GridWalk.EdgeOpen(_row, _col, dr, dc)
+                         || AutoWalk.GridWalk.EdgeOpen(nr, nc, -dr, -dc);
+            bool connected = openEdge
+                ? AutoWalk.GridWalk.IsWalkable(nr, nc)
+                : AutoWalk.GridWalk.Connected(_row, _col, dr, dc);
+            if (!connected)
+            {
+                // WALL vs UNEXPLORED. The grid CANNOT tell them apart: a shelf wall
+                // and an unwalked corridor square are byte-identical blank records
+                // (live Void Quest dump 2026-08-02 — (16,7) open vs (17,6) wall, both
+                // all-zero). The only honest source is the game's collision, and it is
+                // trustworthy in exactly one place: probing FROM THE PLAYER'S BODY a
+                // short way out (guaranteed open start point, scene loaded around the
+                // player). Earlier attempts probed from remote cell centers — culled
+                // scene far away, buried start points near = lies both ways.
+                int probe = PlayerSightBlocked(nr, nc);          // 1 wall · 0 open · -1 unknown
+                // NEVER claim more than we know (user call 2026-08-02): near the
+                // player collision decides; out of its range the grid genuinely
+                // cannot tell a shelf wall from an unwalked square, so say BOTH —
+                // the wall hum/thud carries the fine detail while walking.
+                string word = probe == 1 ? "Wall." : probe == 0 ? "Unexplored." : "Wall or unexplored.";
+                WinBeep(360, 70);
+                Speech.Say(word, true);
+                Log($"[DungeonCursor] {dir} BLOCKED \"{word}\" cell=({nr},{nc}) flag={cell.Flag} edge={openEdge} probe={probe}");
+                return;
+            }
         }
 
         if (_mode == SubMode.Look) MoveLookCursor(nr, nc, dir);
@@ -509,12 +557,71 @@ internal class DungeonCursor
         return DirWord(d);
     }
 
+    // ── Honest walls v2 (2026-08-02): the grid's OWN passage model ────────────
+    // Walkability = GridWalk.Connected (edge bits + roomIds — the auto-walk
+    // planner's floor-proven test), NOT the cell flag alone (walls read as floor
+    // in Magatsu/Secret Lab/Void Quest) and NOT the collision sensor (the scene
+    // is distance-culled around the player — far cells probed all-clear; CurDiag
+    // capture, B6F 2026-08-02). A known DOOR in the target cell stays browsable.
+    /// <summary>Can the PLAYER see straight into cell (tr,tc)? Probes from the
+    /// player's own body (open space, collision loaded) to that cell's center.
+    /// 1 = wall on the way · 0 = clear · -1 = unknown (target too far to trust,
+    /// no position, or no answer). Blocks ≤ ~90ms on the game-thread pump.</summary>
+    private static int PlayerSightBlocked(int tr, int tc)
+    {
+        const float TrustRange = 2100f;   // ~1.75 cells — inside the loaded scene
+        float px = FieldTracker.LivePlayerX, pz = FieldTracker.LivePlayerZ;
+        if (float.IsNaN(px) || float.IsNaN(pz)) return -1;
+        if (!MinimapTracker.CellToWorld(tr, tc, out float tx, out float tz)) return -1;
+        float dx = tx - px, dz = tz - pz;
+        float span = MathF.Sqrt(dx * dx + dz * dz);
+        if (span < 1e-3f || span > TrustRange) return -1;
+        FieldTracker.RequestCursorSegProbe(px, pz, dx / span, dz / span, span);
+        for (int w = 0; w < 30; w++)
+        {
+            if (FieldTracker.TryGetCursorSegProbe(out bool blocked)) return blocked ? 1 : 0;
+            Thread.Sleep(3);
+        }
+        return -1;
+    }
+
+    /// <summary>Does this cell hold ANY map geometry (edge bits or a roomId)? An
+    /// all-zero record = solid wall block; geometry with flag 0 = mapped floor the
+    /// player hasn't walked yet ("Unexplored"). Live-verified on Void Quest Ch.3
+    /// 2026-08-02: side walls (21,6)/(17,6)/(16,7) all-zero, the open corridor ahead
+    /// (22,7) flag 0 with edge 0x55.</summary>
+    [ThreadStatic] private static byte[]? _geomRaw;
+    private static bool CellHasGeometry(int row, int col)
+    {
+        _geomRaw ??= new byte[MinimapTracker.CELL_SIZE];
+        if (!MinimapTracker.ReadCellRawBytes(row, col, _geomRaw)) return false;
+        return _geomRaw[0x0A] != 0 || _geomRaw[2] != 0 || _geomRaw[3] != 0;
+    }
+
+    /// <summary>A known door inside the cell (browsable regardless of edges).</summary>
+    private static bool DoorInCell(int row, int col)
+    {
+        foreach (var (x, z) in DungeonNav.Doors()) if (InCell(x, z, row, col)) return true;
+        return false;
+    }
+
     private bool NeighborWalkable(int dr, int dc)
     {
         if (dr == 0 && dc == 0) return false;
         int r = _row + dr, c = _col + dc;
         if (r < 0 || r >= MinimapTracker.ROWS || c < 0 || c >= MinimapTracker.COLS) return false;
-        return MinimapTracker.ReadCell(r, c, out var cell) && cell.Flag == 1;   // 1 = walkable floor/door
+        if (DoorInCell(r, c)) return true;
+        // Gridded floor → the planner's connectivity with the TWO-SIDED edge check
+        // (the passage bit can live on either neighbor); gridless (current cell has
+        // no data) → the legacy flag test ("No way out" stays honest).
+        if (MinimapTracker.ReadCell(_row, _col, out var cur) && cur.Flag != 0)
+        {
+            bool openEdge = AutoWalk.GridWalk.EdgeOpen(_row, _col, dr, dc)
+                         || AutoWalk.GridWalk.EdgeOpen(r, c, -dr, -dc);
+            return openEdge ? AutoWalk.GridWalk.IsWalkable(r, c)
+                            : AutoWalk.GridWalk.Connected(_row, _col, dr, dc);
+        }
+        return MinimapTracker.ReadCell(r, c, out var cell) && cell.Flag == 1;
     }
 
     private static string NaturalJoin(List<string> parts) =>
@@ -532,7 +639,7 @@ internal class DungeonCursor
     {
         // Shadow first; carry its facing relative to the player ("facing you" = it
         // can ambush, "facing away" = you can hit it from behind).
-        foreach (var (x, z, fx, fz) in DungeonNav.ShadowsWithFacing())
+        foreach (var (x, z, fx, fz, stype) in DungeonNav.ShadowsWithType())
             if (InCell(x, z, row, col))
             {
                 string f = "";
@@ -542,7 +649,7 @@ internal class DungeonCursor
                     if (!float.IsNaN(px) && !float.IsNaN(pz))
                         f = (fx * (px - x) + fz * (pz - z)) > 0 ? ", facing you" : ", facing away";
                 }
-                return $"Shadow{f}";
+                return $"{DungeonNav.ShadowTypeName(stype)}{f}";
             }
         foreach (var (x, z) in DungeonNav.Chests()) if (InCell(x, z, row, col)) return "Chest";
         foreach (var (x, z) in DungeonNav.Doors()) if (InCell(x, z, row, col)) return "Door";
@@ -596,7 +703,8 @@ internal class DungeonCursor
     };
 
     private static uint ContentBeep(string content) =>
-        content.StartsWith("Shadow") ? 700u :
+        content.StartsWith("Shadow") || content.StartsWith("Strong shadow")
+            || content.StartsWith("Golden hand") ? 700u :
         content == "Chest" ? 1500u :
         content == "Door" ? 1100u :
         content == "Unexplored" ? 500u : 950u;

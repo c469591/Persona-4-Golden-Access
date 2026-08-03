@@ -32,6 +32,14 @@ STAT BUFFS only, found via a clean live diff (cast in isolation, watch the stat 
   repel. Was previously (wrongly) "block" then "null". Fixed in both `ClassifyAffinity` and
   `ClassifyPersonaRaw`. Confirmed flags: `0x08`=weak, `0x10`=resist, `0x01`=null, `0x02`=repel; `0x04`/
   `0x20` (drain/repel) still unverified guesses.
+- **⚠ 2026-07-29 — THE TIMER NIBBLE IS NOT AN ACTIVITY GATE.** The +0x25..+0x28 turn counter hits
+  **0 on the effect's LAST ACTIVE TURN** while the stage nibble stays set (BuffDiag v2, Adachi
+  fight: stages EE/EE/0E intact with all timers 00 — the game's UI still showed the debuffs one
+  more turn). The old `timer==0 → inactive` gate dropped every buff/debuff ONE TURN EARLY (the
+  user's "vanishing buffs" report). `BuffTextFromStat` now reads the STAGE nibble alone — the game
+  clears stages at true expiry (log-proven on party buffs) — same for the 5th-channel crit
+  (+0x1E hi needs no +0x14 gate; that nibble is only ever this channel). Expiry announcements are
+  NOT needed: the game's own info bubble says "returned to normal" and BattleLog reads it live.
 - **Stat buffs (`Battle.BuffText(unit)` / `BuffTextFromStat(stat)`) — RE-CRACKED 2026-07-03: the
   bytes are NIBBLE-PAIRED.** Each stage byte `+0x1C..+0x1F` holds TWO channels (high/low nibble,
   signed-nibble stage: `0x1` = up, `0xE` = down → **nibble bit 3 = down**), with per-nibble turn

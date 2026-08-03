@@ -53,15 +53,31 @@ Chain: `msgObj = *(0x1451FE688 + slot*0x40)` → `block = *(msgObj+8)` → line 
   reading all non-masked runs for dialogue (joins two lines); text-dedupe by content
   (silently dropped valid distinct lines once the mask fix made records distinct).
 
-## Speaker name — DEFERRED (not wired)
+## Speaker name — ✅ WIRED + USER-VERIFIED 2026-07-30 ("Name: line. Voiced.")
 
-The name ("Rise"/"Naoto"/"Female student") is NOT in the record or the text run. It lives
-in a per-speaker-GROUP "name-holder" pointer at the block entry `+0x08` (`block+0x38 +
-sub*0x10 + 8`), set on ONE message of a speaker's turn and shared by the rest (their +0x08
-is 0), with a run of pointers then the ASCII name inline. A "nearest holder + first ASCII
-run" heuristic worked for one scene but grabbed the WRONG name elsewhere (Rise → "Kou"),
-so it's DISABLED (`ResolveSpeaker`/`HolderName` kept but unused). To finish: decompile the
-name-draw path in `FUN_140459cf0`/`FUN_140459780` and copy its exact lookup.
+Field-verified across 7+ characters; never misread a name. **Narration rule:** "> …" lines carry
+a speaker id in the data but the game shows no name plate — the leading '>' is the narration
+marker, the reader suppresses the name there. Fail-safe: any hop/sanity failure → no name.
+The HOLDER path (bit15 dynamic names) is wired but unseen in the field — `[SpkDiag]` diagnostics
+stay until sighted (strip at v1.6 packaging). The resolver chain (from the decompile):
+
+The game's own lookup (`FUN_140459cf0` → per-row `FUN_140459780` → **`FUN_14045F030` = the
+name resolver**), per record (`block+0x38 + sub*0x10` — the record the reader already has):
+- **speaker id = `*(u16*)(record + 0x1A)` — DIALOGUE records only** (`+0x18` n18 > 0). On
+  CHOICE records that offset is the n1a run count — DUAL-PURPOSE field (why the n18/n1a
+  split rule works).
+- `0xFFFF` → unnamed (narration).
+- **bit15 SET** → runtime name-holder: `char* @ block + 0xD0 + (id & 0x7FFF)*8` (dynamic
+  names — the protagonist's chosen name etc.). The old heuristic misread this path at the
+  wrong offset (+0x08) → the Rise→"Kou" bug.
+- **else** → the BMD's built-in speaker-name table: the game calls
+  `thunk_FUN_1681ca820(block, id)` (VMProtect region — replicate from the standard MSG1
+  speaker-table layout / extend `Native/Dialog.cs` instead of decompiling).
+- Row-type flags @ record+0x10: bit0 = choice-style, neither bit = name+text row.
+  `FUN_14045e800` = an F1xx control-code scanner (0xF121/0xF124 break, 0xF125 = name
+  override marker) — check it when wiring.
+To wire: extend `ResolveSpeaker` with this chain (Atlus-decode the string); acid test =
+the scene that read Rise as "Kou".
 
 ## Reader behavior
 

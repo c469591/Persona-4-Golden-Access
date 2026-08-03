@@ -98,21 +98,41 @@ Item-id blocks (global ids, confirmed): 0-255 weapons, 256-511 armor,
    alloc 0x3C00, FUN_14027f170 = list SORT comparator). Interesting but not
    needed — the pShop fields above suffice.
 
-## Sell screen (0x12) — DONE 2026-06-18 (user-verified "works beautifully")
+## Sell screen (0x12) — ⚠ REBUILT 2026-07-30/31 (the GOLDEN tabbed screen; user-verified)
 
-RE'd from the builder **`FUN_140280f60(pShop+0x18, shopType)`** (called at the
-0x07→0x12 transition in ShopUpdate; note `param_1` is `uint*` so `+0x18` =
-**byte +0x60**). The sell list reuses the SAME field as the buy list:
-- **list ptr = `*(pShop+0x60)`** (ActiveListPtr), **count = `*(int*)(pShop+0x68)`**
+**⚠ The 2026-06-18 model was an UNSCROLLED ILLUSION.** The Golden sell screen has CATEGORY
+TABS (Materials · Weapons · Armor · Accessories · Expendable, Q/E) and a ~5-row window over
+lists of any length. **EVERY pShop cursor (+0x32 AND +0x9E) is WINDOW-relative here** — they
+step 0..~4 then FREEZE while further presses scroll the list underneath (the June "stepped
+0..N in lockstep" verification used a short early-game inventory that never scrolled →
+"first items read, then silence" once a late-game list overflowed, user 2026-07-30).
+
+**The REAL cursor lives in the named task `fcl_shop_base`'s WORK struct** (registry walk,
+non-NUL terminator rule; live-verified via a 4-snap scroll hunt — the winning cell landed
+INSIDE the work):
+- `work+0x04` u16 = 0x12 (sell-state mirror — used to validate the cached work)
+- **`work+0x32` u16 = WINDOW row · `work+0x34` u16 = SCROLL → TRUE row = window + scroll**
+- `work+0x68` int = the current tab's row count (incl. the Sell-all row)
+
+List DATA is unchanged and indexes 1:1 by the TRUE row:
+- **list ptr = `*(pShop+0x60)`**, **count = `*(int*)(pShop+0x68)`**
 - **entries stride 0x14: `+0x00` price (int) · `+0x04` itemId (u16) · `+0x06` qty (u16)**
-- **highlighted row = cursor at `pShop+0x32`** (live-confirmed: stepped 0..N in
-  lockstep; `+0x9E` mirrors it). The poll announces on `+0x32` change.
-- Each category's list ends with a **"Sell all"** bulk row whose id is the
-  category BLOCK-BASE (1280 for materials → `GetName` empty) and whose price is
-  the TOTAL → labelled "Sell all. N yen". Builder fills items via
-  `FUN_14019f2f0(cat,i)`, keeping only owned (inventory qty byte `+DAT_141165930`)
-  + sellable (`FUN_140246980==0`). Reader: `ShopMenu.AnnounceSellCursor`.
-  The old v2 attempt read the WRONG list (player inventory at +0x10) — deleted.
+- Row 0 = the **"Sell all"** bulk row (id = the category BLOCK-BASE → `GetName` empty;
+  price = the TOTAL) → "Sell all. N yen".
+- Builder `FUN_140280f60(pShop+0x18, shopType)` as before.
+
+Reader (`ShopMenu`, state 0x12 block + `AnnounceSellCursor`):
+- Row from the work struct (window+scroll); falls back to `pShop+0x32` if the task is missing.
+- **Q/E tab switches**: the tabs are BAKED ART — the reader keys on (count, first item id)
+  changing and announces the category CLASSIFIED FROM THE ITEM-ID BLOCK (<256 Weapons ·
+  <512 Armor · <768 Accessories · <1024 Expendables · else Materials).
+- **EMPTY tab** (game shows "There is nothing to sell."): count 0 (work OR pShop) →
+  "Nothing to sell." once per visit — the stale list must never be read.
+
+Hunt notes (2026-07-30): the STATICS zigzag only finds window mirrors (0x140BEAA68 = a
+selected-widget id, 14/15 — red herring); the scroll was isolated by snapshotting at the
+WINDOW EDGE (audible anchor: press Up to "Sell all", 4 Downs to the edge) and stepping
+scroll 0,1,2,3 — `cursor_hunt.py find`. No absolute-row cell exists anywhere.
 
 ## Shiroku Pub TRADE shop — DONE 2026-06-18 (user-verified)
 

@@ -112,6 +112,9 @@ internal sealed unsafe class DamageMonitor
         foreach (var (unit, side, stat) in units)
         {
             if (!IsReadable(stat, 0x10)) continue;
+#if DEBUG
+            try { WatchBuffBlock(unit, side, stat); } catch { }
+#endif
             int hp = *(ushort*)((byte*)stat + 0x08);
             int sp = *(ushort*)((byte*)stat + 0x0A);
             uint status = *(uint*)((byte*)stat + 0x0C);
@@ -212,7 +215,13 @@ internal sealed unsafe class DamageMonitor
         {
             var gone = new List<nint>();
             foreach (var k in _last.Keys) if (!present.Contains(k)) gone.Add(k);
-            foreach (var k in gone) { _last.Remove(k); _lastAction.Remove(k); }
+            foreach (var k in gone)
+            {
+                _last.Remove(k); _lastAction.Remove(k);
+#if DEBUG
+                _buffShadow.Remove(k);
+#endif
+            }
         }
 
         if (msgs.Count > 0)
@@ -266,6 +275,51 @@ internal sealed unsafe class DamageMonitor
     /// <summary>Speak an enemy's freshly-locked action: "X uses Y" (named skill)
     /// or "X attacks" (basic attack / unnamed). Also publishes the attacker so
     /// the damage line that follows doesn't repeat the name.</summary>
+#if DEBUG
+    // TEMP BuffDiag v2 (2026-07-29): the user reports buffs/debuffs "VANISHING" from the
+    // U/O readouts at weird moments (enemy self-buffs, player-cast debuffs, own buffs).
+    // Watch the whole buff-relevant stat block +0x14..+0x28 (stages +0x1C..+0x1F nibble-
+    // paired, timers +0x25..+0x28, 5th-channel timer +0x14, charge flags +0x16) on EVERY
+    // unit; ONE log line per CHANGE with the raw before/after bytes AND what the decoder
+    // would speak at that moment. The log then shows whether the GAME cleared the bytes
+    // (real expiry → the fix is announcing expiries) or the bytes survive and the DECODER
+    // misreads (→ extend the channel map). Strip once the vanish is explained.
+    private const int BuffBlockOff = 0x14, BuffBlockLen = 0x15;   // +0x14 .. +0x28
+    private readonly Dictionary<nint, byte[]> _buffShadow = new();
+
+    private unsafe void WatchBuffBlock(nint unit, int side, nint stat)
+    {
+        if (!IsReadable(stat + BuffBlockOff, BuffBlockLen)) return;
+        var cur = new byte[BuffBlockLen];
+        for (int i = 0; i < BuffBlockLen; i++) cur[i] = *(byte*)(stat + BuffBlockOff + i);
+        if (_buffShadow.TryGetValue(unit, out var old))
+        {
+            bool diff = false;
+            for (int i = 0; i < BuffBlockLen && !diff; i++) diff = old[i] != cur[i];
+            if (diff)
+            {
+                string nm = Battle.UnitDisplayName(unit);
+                string decoded = "";
+                try { decoded = Battle.BuffTextFromStat(stat) ?? "(none)"; } catch { decoded = "(err)"; }
+                Log($"[BuffDiag] {(side == 0 ? "ally" : "enemy")} \"{nm}\" " +
+                    $"{BuffHex(old)} -> {BuffHex(cur)} | decoder says: {decoded}");
+            }
+            else return;
+        }
+        _buffShadow[unit] = cur;
+    }
+
+    // "+14:xx .. +28:xx" but compact: one hex pair per byte, offsets implied (14..28).
+    private static string BuffHex(byte[] b)
+    {
+        var sb = new System.Text.StringBuilder(b.Length * 3 + 8);
+        sb.Append("[14-28:");
+        for (int i = 0; i < b.Length; i++) { sb.Append(' '); sb.Append(b[i].ToString("X2")); }
+        sb.Append(']');
+        return sb.ToString();
+    }
+#endif
+
     private void AnnounceEnemyAction(nint unit, int skill, nint target)
     {
         Battle.LastEnemyAttacker = unit;

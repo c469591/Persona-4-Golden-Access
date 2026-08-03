@@ -169,3 +169,38 @@ portrait 0x1c→id 29 both confirm). `database/social_links.json` holds it;
 SCR_COMMU_<suffix> script task is the fallback; ids self-harvest from
 `[RankUp] id=..` logs. Portrait ids that lack a confident face are left to
 the SCR fallback.
+
+## ART GALLERY ("Giants of P", programs 29/30) — SHIPPED 2026-07-31, parked "keep as is"
+
+`TvListingsReader.cs` (`TickArt`/`ArtCapture`/`ArtVote`/`ArtFlush`). The picture strip has
+NO cursor anywhere found; captions are 2 glyph lines REPAINTED WHOLE EVERY FRAME (~60fps,
+0-16ms gaps — below TickCount64 resolution). The reader is a PURE RECOGNIZER: capture
+rounds on Up/Down edges, votes captured lines against the 62-caption table
+(`tvlistings_catalog.json` "art_captions" ← artCh.arc `CH_ART_DETAILNNN`, strip order),
+speaks "{caption}. {N} of 62." — score-2 instant, 220ms settle on partials, silent
+finalize of abandoned rounds, entry-animation key guard. DEAD ENDS (proven, do not
+re-walk): fixed capture windows, settle-on-silence (legend fulls repaint per frame),
+pass-gap timing, dead-reckoned position, learned strip maps (key REPEAT auto-scrolls
+several pictures per edge; locked pictures are SKIPPED in the strip). Known flaw
+(user-accepted): short Part-2 captions ("Izanagi, Protagonist's") occasionally misvote.
+Full saga: memory `art_gallery_reader.md`.
+
+## MIRACLE QUIZ (the minigame) — SHIPPED 2026-08-01, user-verified ("played and won")
+
+`MiracleQuiz.cs` + `TelopReader.cs`. Task **ch_quiz** work: **+0x0A** = question record
+(0-based, → QUIZ_NNN/ANSWER_NNN in msg_quiz.bmd) · **+0x0C** = on-screen Q number ·
+**+0x12** = answer cursor (screen letters A..D = 0..3) · **+0x56 u16[4]** = the
+per-showing choice SHUFFLE (letter k shows BMD choice perm[k]; valid perm = "question
+staged" announce gate). **⚠ BMD choice[0] is ALWAYS the correct answer — speak only
+through the perm.** Text decodes LIVE from the game's loaded (localized) BMDs — raw
+MSG1 file images at work **+0x3B8/+0x3C0/+0x3C8** (quiz/system/banter) — with the baked
+English `tvlistings_catalog.json` "quiz_questions" (186, `tools/build_quiz_questions.py`)
+as fallback. F re-reads; no timer feature (the game's timer has audio).
+
+The intro/banter/outro captions are TELOPS (task **fnt_telop**, no message window,
+invisible to MsgWindow::DrawDialog): work+0x10 list → per-caption items — item+0x08 →
+container (+0x18 = RELOCATED in-memory MSG1), item+0x24 = dialog index. `TelopReader.cs`
+decodes and speaks each new caption, obeying the Shift+M dialogue reader toggle (voice
+mode → history only). Generic: covers ANY telop caption scene, not just the quiz.
+A quiz PLAYOFF round exists later in the story — same mechanism. Memory:
+`miracle_quiz_and_telop.md`.

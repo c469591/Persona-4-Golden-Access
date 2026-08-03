@@ -73,7 +73,9 @@ internal sealed unsafe class QuestMenu : IDisposable
     private nint OnSetText(nint p1, byte p2, byte p3, uint p4, byte p5, nint p6)
     {
         nint ret = _hook!.OriginalFunction(p1, p2, p3, p4, p5, p6);
+        long t0 = PerfDiag.Begin();
         try { Capture(p1, p6); } catch { /* never let a hook throw */ }
+        PerfDiag.End(PerfDiag.B.QuestCap, t0);
         return ret;
     }
 
@@ -196,30 +198,7 @@ internal sealed unsafe class QuestMenu : IDisposable
     }
 
     // One VirtualQuery, then read up to maxLen ASCII bytes within the validated region.
-    private static string ReadCString(nint p, int maxLen)
-    {
-        if (p == 0) return "";
-        ulong a = (ulong)p;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return "";
-        byte* qbuf = stackalloc byte[48];
-        if (VirtualQuery(p, qbuf, 48) == 0) return "";
-        if (*(uint*)(qbuf + 32) != 0x1000) return "";
-        uint protect = *(uint*)(qbuf + 36);
-        if ((protect & 0x01) != 0 || (protect & 0x100) != 0) return "";
-        nint regionBase = *(nint*)(qbuf + 0);
-        nint regionSize = *(nint*)(qbuf + 24);
-        ulong end = (ulong)regionBase + (ulong)regionSize;
-        int safe = (int)System.Math.Min((ulong)maxLen, end - a);
-
-        var sb = new System.Text.StringBuilder(maxLen);
-        for (int i = 0; i < safe; i++)
-        {
-            byte b = *(byte*)(p + i);
-            if (b == 0) break;
-            if (b >= 0x20 && b < 0x7F) sb.Append((char)b);
-        }
-        return sb.ToString();
-    }
+    private static string ReadCString(nint p, int maxLen) => ReadCStringRpm(p, maxLen);  // RPM since 2026-07-27 (menu-heaviness fix: VirtualQuery stalls under allocator contention)
 
     private static nint ReadPtr(nint addr)
     {

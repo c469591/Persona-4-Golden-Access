@@ -52,9 +52,19 @@ internal sealed unsafe class PersonaSelect
         Battle.PersonaEntered = true;   // the submenu rendered → a real entry (not ring hover)
         if (id == _lastId) return;
         _lastId = id;
+        // The list moved (or reordered after a confirmed change) — drop the panel's
+        // measured rotation so the next panel opening calibrates against THIS row.
+        Battle.ResetPanelBrowse();
 
         string name = Persona.GetName(id);
         if (string.IsNullOrEmpty(name)) return;
+        // One voice per persona change: in the full panel this row redraws too, so
+        // PersonaNav's richer readout (name, arcana, level) would collide with this
+        // one and both got cut off (user "nothing is getting read", 2026-08-02).
+        if (!Battle.ClaimPersonaSpeech(id)) return;
+        // Just after a confirmed swap the list redraws with the reordered array and
+        // would speak the PREVIOUS persona over our "<name> equipped." line.
+        if (Environment.TickCount64 < PersonaNav.MuteListReadsUntil) return;
         int lvl = entry->Level;
         string spoken = $"{name}, level {lvl}";   // submenu shows persona + level
         Log($"[PersonaSelect] {spoken}");

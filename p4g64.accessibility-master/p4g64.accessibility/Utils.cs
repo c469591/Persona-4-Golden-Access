@@ -10,6 +10,48 @@ namespace p4g64.accessibility;
 
 internal class Utils
 {
+    // ── RPM-based guarded reads (2026-07-27, THE MENU-HEAVINESS FIX) ─────────────
+    // VirtualQuery walks the process VAD tree under a lock the game's allocator
+    // holds at its busiest screens — PerfDiag measured ~5ms PER CALL stalls on the
+    // game thread (ConfigValueText/ShuffleText captures ate 1.5-2.7s of every 3s
+    // window in velvet/battle). ReadProcessMemory validates + copies in one step
+    // with no VAD walk. Use THESE on any per-frame/per-draw path, never VirtualQuery.
+    [DllImport("kernel32.dll", EntryPoint = "ReadProcessMemory")]
+    private static extern unsafe bool Rpm(nint h, nint addr, void* buf, nint size, out nint read);
+    [DllImport("kernel32.dll", EntryPoint = "GetCurrentProcess")]
+    private static extern nint SelfProc();
+
+    /// <summary>Copy <paramref name="size"/> bytes from <paramref name="addr"/> into
+    /// <paramref name="dst"/> — false (nothing copied) on any unreadable page. No VAD walk.</summary>
+    internal static unsafe bool TryReadRaw(nint addr, void* dst, int size)
+        => addr >= 0x10000 && (ulong)addr <= 0x00007FFFFFFFFFFFUL
+           && Rpm(SelfProc(), addr, dst, size, out nint got) && got == (nint)size;
+
+    /// <summary>Printable-ASCII C-string read via RPM (page-boundary aware: reads to the
+    /// end of each readable page, stops cleanly at the first unreadable one). The drop-in
+    /// replacement for the per-component VirtualQuery ReadCStr copies.</summary>
+    internal static unsafe string ReadCStringRpm(nint p, int maxLen)
+    {
+        if (p == 0 || maxLen <= 0) return "";
+        if (maxLen > 256) maxLen = 256;
+        byte* buf = stackalloc byte[256];
+        var sb = new StringBuilder(Math.Min(maxLen, 64));
+        int total = 0;
+        while (total < maxLen)
+        {
+            int chunk = Math.Min(maxLen - total, 0x1000 - (int)((ulong)(p + total) & 0xFFF));
+            if (!TryReadRaw(p + total, buf, chunk)) break;
+            for (int i = 0; i < chunk; i++)
+            {
+                byte b = buf[i];
+                if (b == 0) return sb.ToString();
+                if (b >= 0x20 && b < 0x7F) sb.Append((char)b);
+            }
+            total += chunk;
+        }
+        return sb.ToString();
+    }
+
     private static ILogger _logger;
     private static Config _config;
     internal static Config Config => _config;

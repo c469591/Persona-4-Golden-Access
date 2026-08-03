@@ -164,11 +164,19 @@ internal sealed unsafe class BacklogReader
         string text = ReadEntryText(rec);
         if (text.Length == 0) return false;   // empty render (e.g. a fully-masked row)
 
-        // Speaker name resolution (ResolveSpeaker) is DISABLED: the name-holder layout
-        // varies and the heuristic grabbed the wrong name (Rise read as "Kou") — worse
-        // than none. Needs the name-draw fn decompiled. Text-only until then.
+        // Speaker name — WIRED 2026-07-30 via the game's own lookup (see ResolveSpeaker;
+        // the old name-holder heuristic that read Rise as "Kou" is replaced). Spoken as
+        // "Name: line." — silent for narration/choices/any resolution doubt (fail-safe).
+        // NARRATION ("> You were told to come here…"): those messages still carry a
+        // speaker id in the data, but the game shows no name plate on them — the leading
+        // '>' bracket IS the narration marker (user-tested 2026-07-30), so suppress.
+        string speaker = "";
+        if (!text.StartsWith(">"))
+            try { speaker = ResolveSpeaker(*(int*)rec, sub); } catch { }
         string suffix = voiced ? " Voiced." : "";
-        Speech.Say($"{prefix}{text}.{suffix}", true);
+        Speech.Say(speaker.Length > 0
+            ? $"{prefix}{speaker}: {text}.{suffix}"
+            : $"{prefix}{text}.{suffix}", true);
         return true;
     }
 
@@ -264,12 +272,21 @@ internal sealed unsafe class BacklogReader
         return sb.ToString().Trim();
     }
 
-    /// <summary>Speaker name for a message. RE 2026-07-20 (live hunt): the message
-    /// block's entry table (block + 0x38, stride 0x10) holds [+0x00 line, +0x08
-    /// name-holder]. The name-holder is set on ONE message of a speaker's group (and
-    /// shared by the rest, which have +0x08 == 0), and contains a run of pointers then
-    /// the ASCII name inline. So: from this sub, scan the entries for the nearest
-    /// name-holder and pull the first clean ASCII run out of it. Empty if none.</summary>
+    /// <summary>Speaker name for a message — THE GAME'S OWN LOOKUP, decompiled 2026-07-30
+    /// (name-draw path FUN_140459cf0 → FUN_140459780 → FUN_14045F030 = the resolver).
+    /// The line record IS a standard MessageDialog (Native/Dialog.cs): +0x18 = PageCount
+    /// (our n18), **+0x1A = SpeakerId** — DUAL-PURPOSE: on CHOICE records (+0x18==0) it's
+    /// the option count instead, so dialogue records only. Then:
+    ///   id == 0xFFFF            → unnamed (narration).
+    ///   id bit15 SET            → runtime NAME-HOLDER: char* @ msgObj + 0xD0 + (id&amp;0x7FFF)*8
+    ///                             (dynamic names, e.g. the protagonist's chosen name — the
+    ///                             old +0x08 heuristic misread THIS path: Rise → "Kou").
+    ///   else                    → the BMD's built-in speaker-name table. The game calls a
+    ///                             VMProtect thunk; we replicate from the MSG1 in-memory
+    ///                             layout: the table header follows the DialogHeaders array
+    ///                             (bmd + 0x30 + DialogCount*0x10) as {char** array, int count}.
+    /// FAIL-SAFE: any hop or sanity check failing → "" (no name beats a wrong name — user
+    /// rule). [SpkDiag] log line per resolution until the layout is field-verified.</summary>
     private static string ResolveSpeaker(int slot, int sub)
     {
         if (slot < 0 || slot >= 64 || sub < 0 || sub >= 8192) return "";
@@ -277,39 +294,49 @@ internal sealed unsafe class BacklogReader
         if (!IsReadable(slotAddr, 8)) return "";
         nint msgObj = *(nint*)slotAddr;
         if (msgObj == 0 || !IsReadable(msgObj + 8, 8)) return "";
-        nint block = *(nint*)(msgObj + 8);
-        if (block == 0) return "";
-        // This message's own holder first; then look FORWARD (name-holder tends to sit
-        // on the last message of a turn), then a short way BACK as a fallback.
-        for (int s = sub; s <= sub + 15; s++)
-        {
-            string nm = HolderName(block, s);
-            if (nm.Length > 0) return nm;
-        }
-        for (int s = sub - 1; s >= 0 && s >= sub - 15; s--)
-        {
-            string nm = HolderName(block, s);
-            if (nm.Length > 0) return nm;
-        }
-        return "";
-    }
+        nint bmd = *(nint*)(msgObj + 8);
+        nint lineAddr = bmd + 0x38 + sub * 0x10;
+        if (bmd == 0 || !IsReadable(lineAddr, 8)) return "";
+        nint line = *(nint*)lineAddr;
+        if (line == 0 || !IsReadable(line + 0x18, 4)) return "";
+        if (*(ushort*)(line + 0x18) == 0) return "";        // CHOICES: +0x1A = option count, no speaker
+        ushort id = *(ushort*)(line + 0x1A);
+        if (id == 0xFFFF) return "";
 
-    private static string HolderName(nint block, int sub)
-    {
-        nint entry = block + 0x38 + sub * 0x10;
-        if (!IsReadable(entry, 0x10)) return "";
-        nint holder = *(nint*)(entry + 8);
-        if (holder == 0 || !IsReadable(holder, 0x60)) return "";
-        // Skip the leading pointer array, then take the first ASCII run of >= 3 chars.
-        var sb = new StringBuilder();
-        for (int i = 0; i < 0x60; i++)
+        string name;
+        string path;
+        if ((id & 0x8000) != 0)
         {
-            if (!IsReadable(holder + i, 1)) break;
-            byte b = *(byte*)(holder + i);
-            if (b >= 0x20 && b < 0x7F) sb.Append((char)b);
-            else { if (sb.Length >= 3) break; sb.Clear(); }
+            // Runtime name-holder table on the message OBJECT (not the BMD).
+            path = "holder";
+            nint pp = msgObj + 0xD0 + (id & 0x7FFF) * 8;
+            if (!IsReadable(pp, 8)) return "";
+            name = DecodeAtlusRun(*(nint*)pp);
         }
-        return sb.Length >= 3 ? sb.ToString().Trim() : "";
+        else
+        {
+            // Static table: header follows the DialogHeaders array. Layout {char**, int}
+            // per the in-memory MSG1 shape — validated by the [SpkDiag] field check.
+            path = "table";
+            if (!IsReadable(bmd + 0x18, 4)) return "";
+            int dcount = *(int*)(bmd + 0x18);               // BmdHeader.DialogCount
+            if (dcount <= 0 || dcount > 4096) return "";
+            nint sphdr = bmd + 0x30 + (nint)dcount * 0x10;
+            if (!IsReadable(sphdr, 12)) return "";
+            nint arr = *(nint*)sphdr;
+            int scount = *(int*)(sphdr + 8);
+            if (arr == 0 || scount <= 0 || scount > 512 || id >= scount
+                || !IsReadable(arr + id * 8, 8)) return "";
+            name = DecodeAtlusRun(*(nint*)(arr + id * 8));
+        }
+        // Sanity gate: a real speaker name is short printable text. Anything else =
+        // the layout hypothesis failed on this block → stay silent, log for the diff.
+        name = name.Trim();
+        bool sane = name.Length >= 1 && name.Length <= 24;
+#if DEBUG
+        Log($"[SpkDiag] slot={slot} sub={sub} id=0x{id:X4} path={path} name=\"{name}\"{(sane ? "" : " REJECTED")}");
+#endif
+        return sane ? name : "";
     }
 
     /// <summary>Entry record by index (the FUN_140459710 walk).</summary>

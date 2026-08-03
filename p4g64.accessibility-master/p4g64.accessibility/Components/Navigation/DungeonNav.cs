@@ -66,7 +66,11 @@ internal class DungeonNav
     // Entrance/lobby (major 20): NO "All doors" — it's not a real dungeon floor (user 2026-07-02).
     private static readonly Cat[] LobbyCategories =
         { Cat.Doors, Cat.Chests, Cat.Shadows, Cat.Exits, Cat.Places };
-    private static bool InLobby() => FieldTracker.CurrentMajor == 20;
+    // Lobby areas: the TV-world hub/entrances (major 20) + the Hollow Forest lobby
+    // "Grave of Hollow Memories" (31/1, 2026-07-27 — its own field, entered from a
+    // different TV; has the save point / party / portal / exit like the hub).
+    private static bool InLobby() => FieldTracker.CurrentMajor == 20
+        || (FieldTracker.CurrentMajor == 31 && FieldTracker.CurrentMinor == 1);
     // Location-aware: every call site uses Categories.Length / Categories[i].
     // "Events" is appended ONLY when the current floor has recorded marks — that
     // presence check IS the "scripted floor" gate, so procedural floors are
@@ -168,7 +172,66 @@ internal class DungeonNav
     private static bool HasEventMarks()
     {
         lock (_marksLock)
-            return _marks.TryGetValue(FloorKey(), out var l) && l.Count > 0;
+            if (_marks.TryGetValue(FloorKey(), out var l) && l.Count > 0) return true;
+        return PresentFloorItems().Count > 0;
+    }
+
+    // ── Post-boss FLOOR ITEM DROPS (2026-07-29) ──────────────────────────────
+    // The invisible item lying on each dungeon's boss floor after the boss.
+    // Positions/bits extracted OFFLINE from the game's field data (script-bound
+    // trigger boxes; tools/build_dungeon_floor_items.py — anchor-validated on
+    // Secret Lab 27_2). Shown in EVENTS as "Dropped item" ONLY while the game's
+    // own presence BIT says it's there (boss beaten, not yet collected) — works
+    // for long-cleared dungeons too (bits persist in the save). Spoiler-safe:
+    // the item NAME is never spoken (the game reveals it on pickup). NO beacon
+    // wiring by design (user call — these floors are cutscene-dense).
+    private sealed class FloorItem
+    {
+        public float X { get; set; }
+        public float Z { get; set; }
+        public int Bit { get; set; } = -1;
+        public bool PresentWhenSet { get; set; } = true;   // liquor store 22_2 inverts (bit = collected)
+        public int ItemId { get; set; }
+        public string Proc { get; set; } = "";
+    }
+    private static readonly Dictionary<string, List<FloorItem>> _floorItems = new();
+    private static readonly List<FloorItem> _noItems = new();
+
+    private static void LoadFloorItems()
+    {
+        try
+        {
+            string p = DataPath("dungeon_floor_items.json");
+            if (!System.IO.File.Exists(p)) { Log("[FloorItems] no data file (feature off)"); return; }
+            var d = JsonSerializer.Deserialize<Dictionary<string, List<FloorItem>>>(System.IO.File.ReadAllText(p));
+            if (d != null) foreach (var kv in d) _floorItems[kv.Key] = kv.Value ?? new();
+            Log($"[FloorItems] loaded drops for {_floorItems.Count} floor(s)");
+        }
+        catch (Exception e) { Log($"[FloorItems] load failed: {e.Message}"); }
+    }
+
+    // FlowScript BIT bitmap *(byte**)0x1451FF7A0 (the teleport/tutorial flag space).
+    private static unsafe bool FlagBitSet(int bitId)
+    {
+        if (bitId < 0) return false;
+        nint pp = unchecked((nint)0x1451FF7A0L);
+        if (!IsReadable(pp, 8)) return false;
+        nint bitmap = *(nint*)pp;
+        if (bitmap == 0) return false;
+        nint addr = bitmap + (bitId >> 5) * 4;
+        if (!IsReadable(addr, 4)) return false;
+        return (*(uint*)addr & (1u << (bitId & 31))) != 0;
+    }
+
+    /// <summary>The current floor's drops that are PRESENT right now (live bit check).</summary>
+    private static List<FloorItem> PresentFloorItems()
+    {
+        if (!_floorItems.TryGetValue(FloorKey(), out var l) || l.Count == 0) return _noItems;
+        List<FloorItem>? outp = null;
+        foreach (var it in l)
+            if (FlagBitSet(it.Bit) == it.PresentWhenSet)
+                (outp ??= new()).Add(it);
+        return outp ?? _noItems;
     }
 
     private static string MarksWritePath()
@@ -301,7 +364,7 @@ internal class DungeonNav
         if (_catIndex >= 0 && _cursor >= 0 && _cursor < _entries.Count && _entries[_cursor].HasPos)
         {
             _selX = _entries[_cursor].TX; _selZ = _entries[_cursor].TZ;
-            _selIsShadow = _entries[_cursor].Label == "Shadow";
+            _selIsShadow = _entries[_cursor].Label is "Shadow" or "Strong shadow" or "Golden hand";
             _selHasPos = true;
         }
         else _selHasPos = false;
@@ -310,6 +373,7 @@ internal class DungeonNav
     public DungeonNav()
     {
         LoadMarks();
+        LoadFloorItems();
         _thread = new Thread(PollLoop) { IsBackground = true, Name = "DungeonNav" };
         _thread.Start();
         Log("[DungeonNav] ready (-/= category Doors/Chests/Shadows/Exits [+Interactables in lobby only], [ ] step entries live, \\ act, Backspace walk)");
@@ -335,9 +399,9 @@ internal class DungeonNav
         try { AutoWalk.DungeonGrid.RecordBreadcrumb(); } catch { }
         // ([ManualDiag] reality-vs-model survey call removed at the 2026-07-18
         // diagnostics strip — the sensor rebuild is signed off.)
-        if (!Utils.GameHasFocus()) return;   // don't process hotkeys while alt-tabbed
-        if (SettingsMenu.IsOpen) return;     // settings menu owns input
-        if (CommandMenus.PlayerMenu.IsMenuOpen) return;   // don't fire nav keys behind the camp menu
+        if (!Utils.GameHasFocus()) { _keysLiveWas = false; return; }   // don't process hotkeys while alt-tabbed
+        if (SettingsMenu.IsOpen) { _keysLiveWas = false; return; }     // settings menu owns input
+        if (CommandMenus.PlayerMenu.IsMenuOpen) { _keysLiveWas = false; return; }   // don't fire nav keys behind the camp menu
         bool inDungeon = InDungeon();
         if (inDungeon != _inDungeonLast)
         {
@@ -346,7 +410,7 @@ internal class DungeonNav
             _cursor = 0;
             _inDungeonLast = inDungeon;
         }
-        if (!inDungeon) return;
+        if (!inDungeon) { _keysLiveWas = false; return; }
 
         // Places (Interactables) is lobby-only; crossing the lobby↔floor boundary
         // changes the active category set's size, so reset the selection to avoid a
@@ -363,6 +427,23 @@ internal class DungeonNav
         {
             _lastDoorSnapMs = nowDoorMs;
             try { _doorSnap = Doors().ToArray(); } catch { }
+        }
+
+        // GHOST-KEY GUARD (2026-07-28): on the FIRST poll after the nav keys go live
+        // (save load / alt-tab return / menu close / floor arrival), any key ALREADY
+        // held is stale — the user heard "Pick a category first." on every first
+        // save-load with nothing pressed. Sync the edge flags to the current state and
+        // skip actions this tick, so only presses that BEGIN while live can fire; log
+        // any stale-held key so the log names the actual culprit.
+        if (!_keysLiveWas)
+        {
+            _keysLiveWas = true;
+            _minusWas = IsKeyDown(VK_OEM_MINUS); _plusWas = IsKeyDown(VK_OEM_PLUS);
+            _lbWas = IsKeyDown(VK_OEM_4); _rbWas = IsKeyDown(VK_OEM_6);
+            _bsWas = IsKeyDown(VK_OEM_5); _bkWas = IsKeyDown(VK_BACK);
+            if (_minusWas || _plusWas || _lbWas || _rbWas || _bsWas || _bkWas)
+                Log($"[DungeonNav] keys-live: STALE HELD key suppressed — minus={_minusWas} plus={_plusWas} lbracket={_lbWas} rbracket={_rbWas} backslash={_bsWas} backspace={_bkWas}");
+            return;
         }
 
         bool minus = IsKeyDown(VK_OEM_MINUS);
@@ -429,6 +510,14 @@ internal class DungeonNav
         bool f8 = ctrl && IsKeyDown(0x77);
         if (f8 && !_f8Was) DumpMinimapRaw();
         _f8Was = f8;
+
+        // Ctrl+F9 (Debug, TEMP 2026-07-24): fingerprint every scene interactable near the
+        // player — hunting the field that separates a post-boss WEAPON/ITEM DROP from a real
+        // door (the drop reads as a "Door" cluster but isn't in the treasure array). Stand next
+        // to the drop → Ctrl+F9, then next to a normal door → Ctrl+F9; diff the [DropDiag] rows.
+        bool f9 = ctrl && IsKeyDown(0x78);
+        if (f9 && !_f9Was) LogInteractableFingerprint();
+        _f9Was = f9;
 #endif
     }
 
@@ -550,6 +639,11 @@ internal class DungeonNav
             AutoWalk.AutoWalker.WalkToStairs();
             return;
         }
+        if (cat == Cat.Events && e.Label == InvisLabel)   // World 3 stealth toggle — an ACTION, not a walk
+        {
+            ToggleStealth();
+            return;
+        }
         if (cat == Cat.Events && IsFloorJumpLabel(e.Label, out int jdir))   // placed "Next/Previous floor" event
         {
             TeleportRelativeFloor(jdir);
@@ -627,8 +721,10 @@ internal class DungeonNav
         Log($"[EventMarks] PROMOTE floor={key} label={e.Label} pos=({e.TX:F0},{e.TZ:F0})");
     }
 
+    private bool _keysLiveWas;   // ghost-key guard: false while any Tick gate blocks the keys
+
 #if DEBUG
-    private bool _f8Was;
+    private bool _f8Was, _f9Was;
 
     // Ctrl+F8 (Debug): dump the runtime minimap raw + the world transform anchors —
     // the offline half is field\map\f0XX_YYY.MAP (2026-07-12); aligning the two
@@ -657,6 +753,55 @@ internal class DungeonNav
             Speech.Say("Minimap dumped.", true);
         }
         catch (Exception e) { Log($"[MapDump] failed: {e.Message}"); }
+    }
+
+    // Ctrl+F9 (Debug, TEMP): dump each scene-actor interactable within 4000u of the player —
+    // position, distance, active byte, radius (+0x430), and a curated set of candidate id/type
+    // dwords. Goal: find the field that flags a post-boss WEAPON DROP vs a real door so the drop
+    // can be surfaced generically (all dungeons) in the nav browser. Every read IsReadable-guarded
+    // and single-width (no wide sweep) per the crash rules. Remove once the discriminator is found.
+    private unsafe void LogInteractableFingerprint()
+    {
+        try
+        {
+            float px = FieldTracker.LivePlayerX, pz = FieldTracker.LivePlayerZ;
+            Log($"[DropDiag] === scene interactables  {FieldTracker.CurrentMajor}/{FieldTracker.CurrentMinor}  player=({px:F0},{pz:F0}) ===");
+            if (!IsReadable(SceneRootPtr, 8)) { Log("[DropDiag] scene root unreadable"); return; }
+            nint sceneRoot = *(nint*)SceneRootPtr;
+            if (sceneRoot == 0 || !IsReadable(sceneRoot + OFF_SCENE, 8)) { Log("[DropDiag] scene ptr unreadable"); return; }
+            nint scene = *(nint*)(sceneRoot + OFF_SCENE);
+            if (scene == 0 || !IsReadable(scene + OFF_LIST_HEAD, 8)) { Log("[DropDiag] list head unreadable"); return; }
+
+            // curated candidate offsets to hunt a per-object TYPE/id discriminator
+            int[] io = { 0x00, 0x08, 0x0C, 0x10, 0x20, 0x2C, 0x400, 0x404, 0x408, 0x40C, 0x420, 0x424, 0x428, 0x42C, 0x434, 0x438 };
+            nint node = *(nint*)(scene + OFF_LIST_HEAD);
+            int guard = 0, shown = 0;
+            while (node != 0 && guard++ < 4096)
+            {
+                if (!IsReadable(node + OFF_NODE_ACTIVE, 1)) break;
+                byte act = *(byte*)(node + OFF_NODE_ACTIVE);
+                float x = float.NaN, z = float.NaN;
+                if (IsReadable(node + OFF_NODE_XFORM, 8))
+                {
+                    nint xf = *(nint*)(node + OFF_NODE_XFORM);
+                    if (xf != 0 && IsReadable(xf + OFF_ACTOR_Z, 4)) { x = *(float*)(xf + OFF_ACTOR_X); z = *(float*)(xf + OFF_ACTOR_Z); }
+                }
+                float dist = (!float.IsNaN(x) && !float.IsNaN(px)) ? MathF.Sqrt((x - px) * (x - px) + (z - pz) * (z - pz)) : float.NaN;
+                if (!float.IsNaN(dist) && dist < 4000f && (x != 0f || z != 0f))
+                {
+                    float rad = IsReadable(node + OFF_NODE_RADIUS, 4) ? *(float*)(node + OFF_NODE_RADIUS) : float.NaN;
+                    var sb = new System.Text.StringBuilder();
+                    foreach (int o in io) { int v = IsReadable(node + o, 4) ? *(int*)(node + o) : 0; sb.Append($" +{o:X3}=0x{v:X8}"); }
+                    Log($"[DropDiag] node=0x{(long)node:X} pos=({x:F0},{z:F0}) d={dist:F0} act=0x{act:X2} r430={rad:F3}{sb}");
+                    shown++;
+                }
+                if (!IsReadable(node + OFF_NODE_NEXT, 8)) break;
+                node = *(nint*)(node + OFF_NODE_NEXT);
+            }
+            Log($"[DropDiag] shown {shown} node(s) within 4000u");
+            Speech.Say($"Dumped {shown} interactables.", true);
+        }
+        catch (Exception e) { Log($"[DropDiag] failed: {e.Message}"); }
     }
 #endif
 
@@ -694,11 +839,51 @@ internal class DungeonNav
     // Event marks for the CURRENT floor, nearest-first, as routable entries. The
     // label is whatever was authored ("Stairs", "Event door"); Backspace walks
     // there via the generic AutoWalker.Start path in StartWalk (HasPos = true).
+    // ── Magatsu Mandala World 3 invisibility toggle (user design 2026-08-02) ──
+    // On floor id 125 ANY shadow contact ejects the player (game gimmick). The
+    // Events category offers "Make yourself invisible": Backspace TOGGLES the
+    // game's OWN Hermit-card stealth state — save-block byte 0x1451BE0A3 bit
+    // 0x40 (bisect-proven single source; the game derives the shimmer + AI
+    // ignore from it and clears it itself on battle/floor change).
+    private const string InvisLabel = "Make yourself invisible";
+    private static readonly unsafe byte* HermitStealth = (byte*)0x1451BE0A3L;
+    private const int MagatsuWorld3FloorId = 125;
+
+    private static unsafe bool StealthOn()
+    {
+        byte b;
+        return TryReadRaw((nint)HermitStealth, &b, 1) && (b & 0x40) != 0;
+    }
+
+    private static unsafe void ToggleStealth()
+    {
+        byte b;
+        if (!TryReadRaw((nint)HermitStealth, &b, 1)) { Speech.Say("Can't reach the stealth flag.", true); return; }
+        b ^= 0x40;
+        *HermitStealth = b;
+        bool on = (b & 0x40) != 0;
+        Log($"[DungeonNav] World 3 invisibility toggled {(on ? "ON" : "OFF")}");
+        Speech.Say(on
+            ? "Invisibility on. Shadows cannot notice you. It ends if a battle starts or you change floors."
+            : "Invisibility off.", true);
+    }
+
     private List<Entry> BuildEventEntries()
     {
         var list = new List<Entry>();
+        // The World 3 toggle rides on top of the floor's marks (always first).
+        if (FieldTracker.DungeonFloorId() == MagatsuWorld3FloorId)
+            list.Add(new Entry
+            {
+                Say = InvisLabel + (StealthOn() ? ", currently on" : ", currently off"),
+                Dist = -1, FloorDir = 0, Label = InvisLabel, HasPos = false
+            });
         List<EventMark> marks;
         lock (_marksLock) marks = _marks.TryGetValue(FloorKey(), out var l) ? new List<EventMark>(l) : new();
+        // The post-boss floor drop rides the Events category as a synthetic mark while
+        // present (see PresentFloorItems) — same walk dispatch, nothing persisted.
+        foreach (var it in PresentFloorItems())
+            marks.Add(new EventMark { X = it.X, Z = it.Z, Label = "Dropped item" });
         if (marks.Count == 0) return list;
 
         float px = FieldTracker.LivePlayerX, pz = FieldTracker.LivePlayerZ;
@@ -745,6 +930,22 @@ internal class DungeonNav
         var list = new List<Entry>();
         float px = FieldTracker.LivePlayerX, pz = FieldTracker.LivePlayerZ;
         bool havePos = !float.IsNaN(px) && !float.IsNaN(pz);
+
+        // Hollow Forest lobby (31/1): no stairs — floor movement here is the floor PORTAL
+        // (enter the dungeon) and the TV EXIT (leave). Fixed spots the user recorded as
+        // marks 2026-07-27, baked here so they list under Stairs with real names.
+        if (FieldTracker.CurrentMajor == 31 && FieldTracker.CurrentMinor == 1)
+        {
+            foreach (var (lbl, x, z) in new (string lbl, float x, float z)[]
+                     { ("Dungeon entrance", -70.6f, -882.0f), ("Exit", -177.0f, -3899.0f) })
+            {
+                float dist = havePos ? MathF.Sqrt((x - px) * (x - px) + (z - pz) * (z - pz)) : 0;
+                int steps = AutoWalk.RouteSpeech.StepsFromUnits(dist);
+                list.Add(new Entry { Say = $"{lbl}, {steps} steps", Dist = dist, FloorDir = 0,
+                                     Label = lbl, HasPos = true, TX = x, TZ = z });
+            }
+            return list;
+        }
 
         var pts = new List<(float x, float z)>();
         if (AutoWalk.GridRouter.HasGrid())
@@ -817,7 +1018,7 @@ internal class DungeonNav
         float px = FieldTracker.LivePlayerX, pz = FieldTracker.LivePlayerZ;
         if (float.IsNaN(px) || float.IsNaN(pz)) return list;
 
-        foreach (var (x, z, sfx, sfz) in EnumerateShadows())
+        foreach (var (x, z, sfx, sfz, stype) in EnumerateShadows())
         {
             float dx = x - px, dz = z - pz;
             float dist = MathF.Sqrt(dx * dx + dz * dz);
@@ -834,8 +1035,9 @@ internal class DungeonNav
                 float fdot = sfx * (-dx) + sfz * (-dz);
                 face = fdot > 0 ? ", facing you" : ", facing away";
             }
-            list.Add(new Entry { Say = $"Shadow {dir}, {steps} step{(steps == 1 ? "" : "s")}{face}", Dist = dist,
-                                 Label = "Shadow", HasPos = true, TX = x, TZ = z });
+            string kind = ShadowTypeName(stype);
+            list.Add(new Entry { Say = $"{kind} {dir}, {steps} step{(steps == 1 ? "" : "s")}{face}", Dist = dist,
+                                 Label = kind, HasPos = true, TX = x, TZ = z });
         }
         list.Sort((a, b) => a.Dist.CompareTo(b.Dist));
         return list;
@@ -1092,11 +1294,19 @@ internal class DungeonNav
     {
         var outp = new List<(float x, float z)>();
         if (!ReadFloorGate()) return outp;
-        foreach (var (x, z, _, _) in EnumerateShadows()) outp.Add((x, z));
+        foreach (var (x, z, _, _, _) in EnumerateShadows()) outp.Add((x, z));
         return outp;
     }
     /// <summary>Shadows with their forward vector (fx,fz) for facing checks.</summary>
     internal static List<(float x, float z, float fx, float fz)> ShadowsWithFacing()
+    {
+        var outp = new List<(float, float, float, float)>();
+        if (!ReadFloorGate()) return outp;
+        foreach (var (x, z, fx, fz, _) in EnumerateShadows()) outp.Add((x, z, fx, fz));
+        return outp;
+    }
+    /// <summary>Shadows with facing AND the spawn type (1 normal / 2 strong / 3 golden hand).</summary>
+    internal static List<(float x, float z, float fx, float fz, int type)> ShadowsWithType()
         => ReadFloorGate() ? EnumerateShadows() : new();
 
     private static unsafe List<(float x, float z)> EnumerateChests()
@@ -1132,9 +1342,22 @@ internal class DungeonNav
         Log($"[ChestArray]{sb}");
     }
 
-    private static unsafe List<(float x, float z, float fx, float fz)> EnumerateShadows()
+    // Slot +0x210 = spawn TYPE word, set once at spawn (ghidra shadow_aggro_state):
+    // 1 = normal shadow · 2 = strong red shadow · 3 = golden hand. Live-proven
+    // 2026-08-02 on Magatsu Mandala World 5 with all three kinds on one floor
+    // (hand read 3, the red chest-guard read 2, all normals 1).
+    private const int OFF_SPAWN_TYPE = 0x210;
+
+    internal static string ShadowTypeName(int t) => t switch
     {
-        var outp = new List<(float, float, float, float)>();
+        2 => "Strong shadow",
+        3 => "Golden hand",
+        _ => "Shadow",
+    };
+
+    private static unsafe List<(float x, float z, float fx, float fz, int type)> EnumerateShadows()
+    {
+        var outp = new List<(float, float, float, float, int)>();
         for (int i = 0; i < SLOT_COUNT; i++)
         {
             nint e = ShadowArray + i * SLOT_STRIDE;
@@ -1151,7 +1374,8 @@ internal class DungeonNav
                 fz = *(float*)(actor + OFF_ACTOR_FZ);
                 if (!float.IsFinite(fx) || !float.IsFinite(fz)) { fx = 0f; fz = 0f; }
             }
-            outp.Add((x, z, fx, fz));
+            int type = IsReadable(e + OFF_SPAWN_TYPE, 2) ? *(ushort*)(e + OFF_SPAWN_TYPE) : 1;
+            outp.Add((x, z, fx, fz, type));
         }
         return outp;
     }
@@ -1299,6 +1523,9 @@ internal class DungeonNav
 
                 bool isGaze = cat == 1 && id == 0x0001;          // player-facing cursor, not a place
                 bool isMarker = (flags & MT_MARKER_FLAG) != 0;   // template / room-grid row
+                // (Hollow Forest lobby 31/1: its cat=4 marker rows ids 2/3 were briefly admitted
+                // as "Object 2/3" 2026-07-27 — NOT the portal/exit, user had them removed. The
+                // real portal/exit are fixed named entries in the STAIRS category instead.)
                 // id 0x07D0 (2000) is a generic "person present here" mirror —
                 // the SAME id appears at every NPC's spot AND the player. It's
                 // enumerated before the real NPC (distinct-id cat=5 row) and,

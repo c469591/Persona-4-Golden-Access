@@ -235,5 +235,1745 @@
       "At the end of the dungeon, Namatame is holding Nanako prisoner. His Shadow goes berserk."
     ]
   ],
-  "_music_note": "music_playlists are ORDER REFERENCES for the capture reader (rotation fix) - names spoken always come from the game's own draws."
+  "_music_note": "music_playlists are ORDER REFERENCES for the capture reader (rotation fix) - names spoken always come from the game's own draws.",
+  "art_captions": [
+    "Protagonist, Initial design draft",
+    "Protagonist, Finalized design",
+    "Yosuke Hanamura, Finalized design",
+    "Yosuke Hanamura, Drag rough design",
+    "Chie Satonaka, Initial design draft",
+    "Chie Satonaka, Finalized design",
+    "Yukiko Amagi, Initial design draft 1",
+    "Yukiko Amagi, Initial design draft 2",
+    "Kanji Tatsumi, Finalized design",
+    "Kanji Tatsumi, Initial design draft",
+    "Teddie, Finalized design",
+    "Teddie, Initial design draft",
+    "Rise Kujikawa, Finalized design",
+    "Rise Kujikawa, Initial design draft",
+    "Naoto Shirogane, Finalized design",
+    "Naoto Shirogane, Initial design draft",
+    "Nanako Dojima, Finalized design",
+    "Nanako Dojima, Initial design draft 1",
+    "Nanako Dojima, Initial design draft 2",
+    "Ryotaro Dojima, Finalized design",
+    "Ryotaro Dojima, Initial design draft",
+    "Tohru Adachi, Finalized design",
+    "Tohru Adachi, Initial design draft",
+    "Marie, Finalized design",
+    "Izanagi, Protagonist's",
+    "Izanagi-no-Okami, Protagonist's",
+    "Jiraiya, Yosuke Hanamura's",
+    "Susano-o, Yosuke Hanamura's",
+    "Tomoe, Chie Satonaka's",
+    "Suzuka Gongen, Chie Satonaka's",
+    "Konohana Sakuya, Yukiko Amagi's",
+    "Amaterasu, Yukiko Amagi's",
+    "Take-Mikazuchi, Kanji Tatsumi's",
+    "Rokuten Maou, Kanji Tatsumi's",
+    "Himiko, Rise Kujikawa's",
+    "Kanzeon, Rise Kujikawa's",
+    "Kintoki-Douji, Teddie's initial Persona",
+    "Kamui, Teddie's awakened",
+    "Sukuna-Hikona, Naoto Shirogane's",
+    "Yamato Takeru, Naoto Shirogane's",
+    "Game Software , \"Persona 4\"",
+    "Game Software , \"Persona 4\"",
+    "Official Persona 4 site, Downloadable wallpaper",
+    "Famitsu , Cover",
+    "Famitsu , Back cover",
+    "Dengeki PlayStation, Cover",
+    "Dengeki Maou, Cover",
+    "Play Magazine, Cover",
+    "Persona 4: Amnesia of, the Fog Cover",
+    "Persona 4: Your, Affection Cover",
+    "Persona 4: Official Art, Book Cover",
+    "Persona Club P4, Cover",
+    "P4 original bonus, Store: GEO",
+    "P4 original bonus, Store: Messe Sanoh",
+    "P4 original bonus, Store: Medialand",
+    "P4 original bonus, Store: Wonder Goo",
+    "P4 original bonus, Store: 7-Eleven",
+    "Persona 4 trading cards, Promotional giveaway",
+    "Weiss Schwarz, Persona 4",
+    "Famitsu.com special page, Blog illustration",
+    "Persona 4 Drama CD, Vol. 3 cover",
+    "Persona 4 Drama CD, Vol. 1, 2 cover"
+  ],
+  "quiz_questions": [
+    {
+      "q": "Yosuke had many things to say about the curry he ate on the school trip. Which of these adjectives did he NOT use?",
+      "c": [
+        "Sticky",
+        "Gritty",
+        "Slimy",
+        "Squishy"
+      ]
+    },
+    {
+      "q": "The first victim of the serial killings was Mayumi Yamano... Her lover was Taro Namatame. Who is Namatame's wife?",
+      "c": [
+        "Misuzu Hiiragi",
+        "Misuzu Tsubaki",
+        "Misuzu Higashi",
+        "Misuzu Kisaragi"
+      ]
+    },
+    {
+      "q": "\"Your soulmate will appear if you stare into a television set on a rainy night...\" What rumor did I just describe?",
+      "c": [
+        "The Midnight Channel",
+        "The Midday Channel",
+        "The Late-Night Channel",
+        "The Midnight Radio"
+      ]
+    },
+    {
+      "q": "\"Daidara Metalworks\" in the central shopping district is known for its scar-faced owner. What does the dot after \"Daidara\" mean?",
+      "c": [
+        "Daidara Bocchi",
+        "Daidara Period",
+        "Daidara Dot",
+        "Daidara Ten"
+      ]
+    },
+    {
+      "q": "Which is the name of the weekend shopping program with the catchy tune?",
+      "c": [
+        "Tanaka's Amazing",
+        "Tanaka's Awesome",
+        "Katana's Amazing",
+        "Tanaka's Consumables"
+      ]
+    },
+    {
+      "q": "Everyone knows the home shopping program \"Tanaka's Amazing Commodities.\" Which of these phrases are in its theme song?",
+      "c": [
+        "Granter of your desires",
+        "Granter of your wishes",
+        "Granter of our desires",
+        "Granter of our wishes"
+      ]
+    },
+    {
+      "q": "What is the jingle in Junes commercials?",
+      "c": [
+        "Every day's great",
+        "Every day's swell",
+        "Everybody's great",
+        "Every day, young life"
+      ]
+    },
+    {
+      "q": "In the Quelorie Magic commericial, Rise says: \"Enough with going to the gym! Good thing there's something...\" what?",
+      "c": [
+        "...even I can handle!",
+        "...even I can take!",
+        "...even I can keep up!",
+        "...even I can try!"
+      ]
+    },
+    {
+      "q": "What is the full name of the replacement 2nd year teacher in class 2, Ms. Kashiwagi?",
+      "c": [
+        "Noriko Kashiwagi",
+        "Tomoko Kashiwagi",
+        "Machiko Kashiwagi",
+        "Akiko Kashiwagi"
+      ]
+    },
+    {
+      "q": "What is the full name of Mr. Morooka, more popularly known as King Moron?",
+      "c": [
+        "Kinshiro Morooka",
+        "Kinjiro Morooka",
+        "Kinichiro Morooka",
+        "Kingoro Morooka"
+      ]
+    },
+    {
+      "q": "What is the word President Tanaka uses to introduce his products on TV?",
+      "c": [
+        "Wonderfulness",
+        "Brilliantness",
+        "Greatness",
+        "Sweetdiculousness"
+      ]
+    },
+    {
+      "q": "Among the boys of Yasogami High, what is the ritual of asking Yukiko out on a date called?",
+      "c": [
+        "The Amagi Challenge",
+        "The Amagi Adventure",
+        "The Amagi Trials",
+        "The Great Amagi Chase"
+      ]
+    },
+    {
+      "q": "What is pinned to the right side of Teddie's shirt when Chie and Yukiko dress him for the first time at Junes?",
+      "c": [
+        "Nothing",
+        "A rose",
+        "A tulip",
+        "A daisy"
+      ]
+    },
+    {
+      "q": "What design is printed on the fox's apron?",
+      "c": [
+        "Hearts",
+        "Flowers",
+        "Polka dots",
+        "It's plaid"
+      ]
+    },
+    {
+      "q": "What color ribbon does Nanako Dojima wear in her hair?",
+      "c": [
+        "Pink",
+        "Red",
+        "White",
+        "Yellow"
+      ]
+    },
+    {
+      "q": "\"Konishi Liquors,\" on the north side of the central shopping district, has a soda machine. Which of these does it NOT sell?",
+      "c": [
+        "Orange Smash",
+        "Dr. Salt NEO",
+        "Second Maid",
+        "The Natural"
+      ]
+    },
+    {
+      "q": "The shopping district doesn't have much car traffic, though there is a road. What's the speed limit there?",
+      "c": [
+        "30 kph",
+        "40 kph",
+        "20 kph",
+        "10 kph"
+      ]
+    },
+    {
+      "q": "The Samegawa River that flows through town is often used as a place to go. What class of river is it considered?",
+      "c": [
+        "Class 2",
+        "Normal Class",
+        "Sub Class",
+        "Class 1"
+      ]
+    },
+    {
+      "q": "What is the name of the bookstore next to the gas station in the central shopping district?",
+      "c": [
+        "Yomenaido Bookstore",
+        "Yondemita Bookstore",
+        "Yomunokayo Bookstore",
+        "Yondemiyo Foodstore"
+      ]
+    },
+    {
+      "q": "What is the name of the now-closed pharmacy on the north side of the central shopping district?",
+      "c": [
+        "Nakanishi Drugs",
+        "Ryuseigun",
+        "Ichikawa Electronics",
+        "Yasogami High School"
+      ]
+    },
+    {
+      "q": "Yasogami High has a classroom building and a practice building. Which of these is NOT on the 2nd floor of the classroom building?",
+      "c": [
+        "Nurse's Office",
+        "Calligraphy Room",
+        "Student Council Room",
+        "Library"
+      ]
+    },
+    {
+      "q": "How many rows from the front is Chie's desk in her class?",
+      "c": [
+        "3",
+        "2",
+        "5",
+        "10"
+      ]
+    },
+    {
+      "q": "The Yomenaido Bookstore sells a number of different books, including the hit \"___ Teacher\" series. Fill in the blank!",
+      "c": [
+        "Bullied",
+        "Crybaby",
+        "Weak",
+        "Intimidated"
+      ]
+    },
+    {
+      "q": "What animal is in the playground at the Junes food court?",
+      "c": [
+        "Panda",
+        "Tiger",
+        "Capybara",
+        "Bear"
+      ]
+    },
+    {
+      "q": "What is the second-to-last stop on the train line going to Yasoinaba?",
+      "c": [
+        "Higashi-Inaba",
+        "Inaba-Guchi",
+        "Nishi-Inaba",
+        "Okina"
+      ]
+    },
+    {
+      "q": "There is a cafe famous for its sublime coffee in front of Okina Station. What is the name of this coffee shop?",
+      "c": [
+        "Chagall",
+        "Shagirl",
+        "Jaguar",
+        "Chagol"
+      ]
+    },
+    {
+      "q": "The drama club at Yasogami High does not have its own room. Which room does it use for its club activities?",
+      "c": [
+        "Meeting Room",
+        "Social Room",
+        "Music Room",
+        "Nurse's Office"
+      ]
+    },
+    {
+      "q": "The Shiroku store offers a sale on rainy days to bring in more customers. How much is this rainy-day discount?",
+      "c": [
+        "20% Off",
+        "30% Off",
+        "40% Off",
+        "50% Off"
+      ]
+    },
+    {
+      "q": "What is the name of the now-closed barber shop in the north side of the central shopping district?",
+      "c": [
+        "Nishino Barber",
+        "Yoshida Barber",
+        "Takano Barber",
+        "Konishi Barber"
+      ]
+    },
+    {
+      "q": "What is the name of the now-closed electronics store in the north side of the central shopping district?",
+      "c": [
+        "Ichikawa Electronics",
+        "Yamakawa Electronics",
+        "Arakawa Electronics",
+        "Kawagoe Electronics"
+      ]
+    },
+    {
+      "q": "What is the name of the now-closed bicycle shop in the north side of the central shopping district?",
+      "c": [
+        "Bigstone",
+        "Biking Queen",
+        "Inaba Bike",
+        "Wada Cycling"
+      ]
+    },
+    {
+      "q": "Which of these stores is not to the left of Okina Station, if you were facing towards its entrance?",
+      "c": [
+        "Okina Books",
+        "Police Substation",
+        "Chagall",
+        "Croco Fur"
+      ]
+    },
+    {
+      "q": "The bulletin board by the police substation at Okina Station says, \"It's everyone's job to keep ____ safe!\" Fill in the blank.",
+      "c": [
+        "Your neighborhood",
+        "The Earth",
+        "Your city",
+        "Your prefecture"
+      ]
+    },
+    {
+      "q": "Which of the following is NOT found in the Yasogami High nurse's office?",
+      "c": [
+        "Instant Soba",
+        "Kettle",
+        "Scale",
+        "Refrigerator"
+      ]
+    },
+    {
+      "q": "How many fire extinguishers are located in the hallways of Yasogami High School's Practice Building?",
+      "c": [
+        "9",
+        "10",
+        "6",
+        "7"
+      ]
+    },
+    {
+      "q": "Portraits of famous composers line the walls of Yasogami High School's music room. Whose portrait isn't there?",
+      "c": [
+        "Chopin",
+        "Bach",
+        "Mozart",
+        "Shubert"
+      ]
+    },
+    {
+      "q": "The Faculty Office of Yasogami High is on the first floor. Which of these is in the room next door?",
+      "c": [
+        "Nurse's Office",
+        "Library",
+        "Calligraphy Room",
+        "Student Council Room"
+      ]
+    },
+    {
+      "q": "What picture is on the poster in front of the Student Council room of Yasogami High School?",
+      "c": [
+        "Infinity symbol",
+        "A big heart",
+        "A proud student",
+        "A no-smoking sign"
+      ]
+    },
+    {
+      "q": "What is the price of receiving a fortune at Tatsuhime Shrine, known for their powers in assisting matchmaking?",
+      "c": [
+        "200 Yen",
+        "300 Yen",
+        "100 Yen",
+        "1000 Yen"
+      ]
+    },
+    {
+      "q": "What is the name of the beach used by Inaba citizens for day trips?",
+      "c": [
+        "Shichiri Beach",
+        "Hachiri Beach",
+        "Kukuri Beach",
+        "Inaba Beach"
+      ]
+    },
+    {
+      "q": "Which exit of Okina Station is used as a meeting spot, with its cafe and theater?",
+      "c": [
+        "North",
+        "East",
+        "South",
+        "West"
+      ]
+    },
+    {
+      "q": "How many student desks are there in Class 2-2 of Yasogami High School?",
+      "c": [
+        "28",
+        "30",
+        "32",
+        "34"
+      ]
+    },
+    {
+      "q": "How many chairs are there in Class 2-2 of Yasogami High School?",
+      "c": [
+        "29",
+        "28",
+        "26",
+        "31"
+      ]
+    },
+    {
+      "q": "What stuffed animal is located on the bottom row around the center of the lockers at the back of Class 2-2?",
+      "c": [
+        "Panda",
+        "Giraffe",
+        "Bear",
+        "Jack Frost"
+      ]
+    },
+    {
+      "q": "There are several banners about ramen at Shichiri Beach. How many are there?",
+      "c": [
+        "4",
+        "6",
+        "7",
+        "1"
+      ]
+    },
+    {
+      "q": "There are two elevators at the entrance to Junes. What color are their doors?",
+      "c": [
+        "Red",
+        "Blue",
+        "Silver",
+        "White"
+      ]
+    },
+    {
+      "q": "There is a statue of a frog in the middle of Shiroku Store. What does it have in its mouth?",
+      "c": [
+        "A pipe",
+        "A toothpick",
+        "A cigar",
+        "A steak skewer"
+      ]
+    },
+    {
+      "q": "Which of these animals DOESN'T have a picture drawn of it near the Junes food court?",
+      "c": [
+        "Panda",
+        "Rabbit",
+        "Giraffe",
+        "Cow"
+      ]
+    },
+    {
+      "q": "Which food is the object on the counter in the middle of the Junes food court?",
+      "c": [
+        "Soft serve",
+        "Takoyaki",
+        "Steak skewer",
+        "A drink cup"
+      ]
+    },
+    {
+      "q": "How many vending machines are there at the central shopping district?",
+      "c": [
+        "4",
+        "3",
+        "2",
+        "1"
+      ]
+    },
+    {
+      "q": "At Okina Station, on which side of the stairways are the escalators?",
+      "c": [
+        "Both sides",
+        "Right side",
+        "Left side",
+        "In the middle"
+      ]
+    },
+    {
+      "q": "When you fought Shadow Kanji, what was the name of the Shadow to your right?",
+      "c": [
+        "Tough Guy",
+        "Nice Guy",
+        "Cool Guy",
+        "Young Guy"
+      ]
+    },
+    {
+      "q": "How much money do you earn from defeating the Shadow \"The Reaper\"?",
+      "c": [
+        "13 yen",
+        "666 yen",
+        "0 yen",
+        "999 yen"
+      ]
+    },
+    {
+      "q": "What color pole was Shadow Rise holding onto?",
+      "c": [
+        "Gold",
+        "Silver",
+        "Pink",
+        "Black"
+      ]
+    },
+    {
+      "q": "What was the name of the skill Shadow Rise used?",
+      "c": [
+        "Supreme Insight",
+        "Supreme Analyze",
+        "Maha Insight",
+        "Mega Analyze"
+      ]
+    },
+    {
+      "q": "Which of these was Shadow Kanji wearing on his feet?",
+      "c": [
+        "Black loafers",
+        "Flip-flops",
+        "Geta",
+        "Red high heels"
+      ]
+    },
+    {
+      "q": "Which of these skills did Shadow Teddie use in battle?",
+      "c": [
+        "Nihil Hand",
+        "Nihil Paw",
+        "Nihil Hell",
+        "Nihil Torture"
+      ]
+    },
+    {
+      "q": "What is Shadow Teddie's ice affinity?",
+      "c": [
+        "Drain",
+        "Nullify",
+        "Strong",
+        "Weak"
+      ]
+    },
+    {
+      "q": "What is the rare golden Shadow that appears in Yukiko's Castle?",
+      "c": [
+        "Lucky Hand",
+        "Golden Hand",
+        "Treasure Hand",
+        "Escaping Hand"
+      ]
+    },
+    {
+      "q": "What is the name of the Shadow that self-destructs in the Steamy Bathhouse?",
+      "c": [
+        "Iron Dice",
+        "Bronze Dice",
+        "Egotistical King",
+        "Positive King"
+      ]
+    },
+    {
+      "q": "When Kanji joined your team, what was his default weapon?",
+      "c": [
+        "Folding Chair",
+        "Wooden Sword",
+        "Iron Schoolbag",
+        "Yasogami Desk"
+      ]
+    },
+    {
+      "q": "When Teddie became available to fight, what was his default weapon?",
+      "c": [
+        "Spikey Punch",
+        "Teddie Claw",
+        "Bear Claw",
+        "Costume Claw"
+      ]
+    },
+    {
+      "q": "What item would be useful to strike Yosuke's weakness?",
+      "c": [
+        "Ball Lightning",
+        "Meat Gum",
+        "Smart Bomb",
+        "Pinwheel"
+      ]
+    },
+    {
+      "q": "What item would be useful to strike Chie's weakness?",
+      "c": [
+        "Firecracker",
+        "Dry Ice",
+        "Tesla Coil",
+        "Meat Gum"
+      ]
+    },
+    {
+      "q": "What item would be useful to strike Yukiko's weakness?",
+      "c": [
+        "Ice Cube",
+        "Pinwheel",
+        "San-Zun Tama",
+        "Wasabi Jelly"
+      ]
+    },
+    {
+      "q": "Which of the following skills or items recovers the most HP for a single ally?",
+      "c": [
+        "Bead",
+        "Diarama",
+        "Mediarama",
+        "Macca Leaf"
+      ]
+    },
+    {
+      "q": "Which of the following items recovers the most HP for a single ally?",
+      "c": [
+        "Antibiotic Gel",
+        "Value Medicine",
+        "Medical Kit",
+        "Muscle Drink"
+      ]
+    },
+    {
+      "q": "Which of the following items recovers the most SP?",
+      "c": [
+        "Cough Drop",
+        "The Natural",
+        "Second Maid",
+        "Dr. Salt NEO"
+      ]
+    },
+    {
+      "q": "Which of the following items recovers the most HP and SP?",
+      "c": [
+        "Chewing Soul",
+        "Meat Gum",
+        "Soul Drop",
+        "Snuff Soul"
+      ]
+    },
+    {
+      "q": "The \"Exhaustion\" ailment makes you lose SP every turn and decreases defense. Which item cures Exhaustion?",
+      "c": [
+        "Royal Jelly",
+        "Muscle Drink",
+        "Herbal Pill",
+        "Soul Food"
+      ]
+    },
+    {
+      "q": "What is the weakness of Izanagi, the first Persona you obtained?",
+      "c": [
+        "Wind",
+        "Fire",
+        "Ice",
+        "Elec"
+      ]
+    },
+    {
+      "q": "Which skill does Yukiko's Persona Konohana Sakuya NOT have when she first joins the team?",
+      "c": [
+        "Media",
+        "Me Patra",
+        "Agi",
+        "Maragi"
+      ]
+    },
+    {
+      "q": "What arcana does the Shadow \"Lying Hablerie\" in Yukiko's Castle belong to?",
+      "c": [
+        "Magician",
+        "Hierophant",
+        "High Priestess",
+        "Empress"
+      ]
+    },
+    {
+      "q": "Which of the following Shadows does NOT appear in Yukiko's Castle?",
+      "c": [
+        "Phantom Master",
+        "Magic Hand",
+        "Calm Pesce",
+        "Magical Magus"
+      ]
+    },
+    {
+      "q": "In Yukiko's Castle, what item does the Shadow \"Black Raven\" drop?",
+      "c": [
+        "Black Lamp",
+        "Wonder Cloth",
+        "Light Iron",
+        "Moustache Fiber"
+      ]
+    },
+    {
+      "q": "What is the weakness of \"Pursuing Pesce,\" which appears in the Steamy Bathhouse?",
+      "c": [
+        "Light",
+        "Electricity",
+        "Wind",
+        "Darkness"
+      ]
+    },
+    {
+      "q": "Which of the following skills does the Shadow \"Monopolizing Cupid\" from the Steamy Bathhouse use?",
+      "c": [
+        "Pulinpa",
+        "Evil Touch",
+        "Makajam",
+        "Balzac"
+      ]
+    },
+    {
+      "q": "Which skill has the same effect as the Purifying Salt item?",
+      "c": [
+        "Dekunda",
+        "Dekaja",
+        "Trafuri",
+        "Traesto"
+      ]
+    },
+    {
+      "q": "What accessory increases the evasion rate against fire attacks?",
+      "c": [
+        "Fire Suppressor",
+        "Fire Vow",
+        "Fire Pin",
+        "Cool Beads"
+      ]
+    },
+    {
+      "q": "Which of the following armors has the lowest defense?",
+      "c": [
+        "Kevlar Vest",
+        "Metal Jacket",
+        "Survival Guard",
+        "Lion Happi"
+      ]
+    },
+    {
+      "q": "Which skill has the effect \"Deals medium Physical damage to 1 foe\"?",
+      "c": [
+        "Assault Dive",
+        "Skewer",
+        "Cruel Attack",
+        "Power Slash"
+      ]
+    },
+    {
+      "q": "Every character has victory poses after battle. Which of these actions does Chie usually perform?",
+      "c": [
+        "Backflip",
+        "Back Handspring",
+        "Cartwheel",
+        "Frontflip"
+      ]
+    },
+    {
+      "q": "What weapon does Yosuke's Persona Jiraiya carry?",
+      "c": [
+        "Shuriken",
+        "Wrench",
+        "Kunai",
+        "Scroll"
+      ]
+    },
+    {
+      "q": "What color are the shoulders of the Shadow \"Steel Machine\" found in the Void Quest?",
+      "c": [
+        "Black, white characters",
+        "White, black characters",
+        "Pure black",
+        "Pure white"
+      ]
+    },
+    {
+      "q": "What Shadow does the Shadow \"Positive King\" summon?",
+      "c": [
+        "Secret Bambino",
+        "Free Bambino",
+        "Blooming Bambino",
+        "Avarice Bambino"
+      ]
+    },
+    {
+      "q": "The \"Angry Table\" that appears in Heaven has several weapons floating around it. Which of the following is one of them?",
+      "c": [
+        "Sword",
+        "Spear",
+        "Axe",
+        "Scythe"
+      ]
+    },
+    {
+      "q": "Several skills consume HP to perform. Which of these skills costs the most HP?",
+      "c": [
+        "Swift Strike",
+        "Kill Rush",
+        "Twin Shot",
+        "Assault Dive"
+      ]
+    },
+    {
+      "q": "One of these weapons makes a different sound than the others. Which is it?",
+      "c": [
+        "Golf Club",
+        "Monkey Wrench",
+        "Leather Shoes",
+        "Tessen"
+      ]
+    },
+    {
+      "q": "What ailment does the skill \"Soul Break\" cause?",
+      "c": [
+        "Exhaustion",
+        "Charm",
+        "Fear",
+        "Panic"
+      ]
+    },
+    {
+      "q": "Shadow Teddie used the skill \"Ultra Charge.\" Where did the energy ball appear when he used it?",
+      "c": [
+        "Left Hand",
+        "Right Hand",
+        "Both Hands",
+        "Above the Head"
+      ]
+    },
+    {
+      "q": "What ailment does the skill \"Evil Touch\" cause?",
+      "c": [
+        "Fear",
+        "Panic",
+        "Dizzy",
+        "Enervation"
+      ]
+    },
+    {
+      "q": "What color is Teddie's tail?",
+      "c": [
+        "Blue",
+        "Red",
+        "White",
+        "He doesn't have a tail"
+      ]
+    },
+    {
+      "q": "Most of the floors in Yukiko's Castle change, but the top floor is always the same. Which story is the top floor?",
+      "c": [
+        "8th",
+        "5th",
+        "10th",
+        "12th"
+      ]
+    },
+    {
+      "q": "What is the name of the item needed to open the locked door in the Steamy Bathhouse?",
+      "c": [
+        "Bathhouse Key",
+        "Sauna Key",
+        "Men's Bath Key",
+        "Secret Key"
+      ]
+    },
+    {
+      "q": "How many horse statues line the walls at the entrance to Yukiko's Castle?",
+      "c": [
+        "6",
+        "10",
+        "8",
+        "4"
+      ]
+    },
+    {
+      "q": "How many chairs are in the dressing room at the entrance to the Steamy Bathhouse?",
+      "c": [
+        "9",
+        "10",
+        "7",
+        "8"
+      ]
+    },
+    {
+      "q": "At the entrance to the TV world that you get to from the TV at Junes, who is standing just to Teddie's right?",
+      "c": [
+        "Chie",
+        "Rise",
+        "Kanji",
+        "Yukiko"
+      ]
+    },
+    {
+      "q": "A certain key is needed to open the treasures in the TV world. What is this key called?",
+      "c": [
+        "Chest Key",
+        "Old Key",
+        "Large Key",
+        "Fancy Key"
+      ]
+    },
+    {
+      "q": "Rare Shadows in the TV world glow gold. Which of the following ISN'T the name of a real rare Shadow?",
+      "c": [
+        "Glory Hand",
+        "Wealth Hand",
+        "Supreme Hand",
+        "Opulent Hand"
+      ]
+    },
+    {
+      "q": "How many stools are there at the entrance to the Steamy Bathhouse?",
+      "c": [
+        "9",
+        "8",
+        "11",
+        "5"
+      ]
+    },
+    {
+      "q": "The ceiling of the Marukyu Striptease is covered in neon signs flashing in many colors. What shape are these signs?",
+      "c": [
+        "Hearts",
+        "Diamonds",
+        "Clovers",
+        "Triangles"
+      ]
+    },
+    {
+      "q": "All the lockers at the entrance to the Steamy Bathhouse have the same number. What is that number?",
+      "c": [
+        "201",
+        "202",
+        "200",
+        "102"
+      ]
+    },
+    {
+      "q": "How many human outlines are drawn on the floor at the entrance to the TV world?",
+      "c": [
+        "18",
+        "20",
+        "13",
+        "10"
+      ]
+    },
+    {
+      "q": "How many TVs are there at the entrance to the TV world?",
+      "c": [
+        "3",
+        "2",
+        "4",
+        "1"
+      ]
+    },
+    {
+      "q": "In the show logo that appeared with Shadow Kanji, fill in the blank: \"___! Kanji Tatsumi in Rosy Steam Paradise!\"",
+      "c": [
+        "Men Only",
+        "The Forbidden Garden",
+        "No Women",
+        "Heartthrob"
+      ]
+    },
+    {
+      "q": "How much does it cost to attempt Aiya's Rainy Day Challenge Mega Beef Bowl?",
+      "c": [
+        "3000 yen",
+        "2000 yen",
+        "2500 yen",
+        "100,000,000 yen"
+      ]
+    },
+    {
+      "q": "How much is a Steak Skewer from Souzai Daigaku?",
+      "c": [
+        "320 yen",
+        "450 yen",
+        "210 yen",
+        "150 yen"
+      ]
+    },
+    {
+      "q": "How much does a ticket to the \"30 Frame\" movie theater at Okina Station cost?",
+      "c": [
+        "1500 yen",
+        "2000 yen",
+        "1000 yen",
+        "2500 yen"
+      ]
+    },
+    {
+      "q": "What is the last name of Hanako, Yasogami High School's larger-than-life student?",
+      "c": [
+        "Ohtani",
+        "Ohno",
+        "Koyama",
+        "Odawara"
+      ]
+    },
+    {
+      "q": "What elementary school grade is Nanako-chan in?",
+      "c": [
+        "1st grade",
+        "4th grade",
+        "2nd grade",
+        "3rd grade"
+      ]
+    },
+    {
+      "q": "Cafe Chagall in front of Okina Station is known for the owner's original blend. What is the owner's name?",
+      "c": [
+        "Mumon",
+        "Mutatsu",
+        "Mukin",
+        "Mugen"
+      ]
+    },
+    {
+      "q": "What series of stickers that comes with candy is popular with children?",
+      "c": [
+        "Tankiriman Sticker",
+        "Universe Sticker",
+        "Prize Sticker",
+        "Earth Sticker"
+      ]
+    },
+    {
+      "q": "What is the name of the employee at the Okina Station costume shop, Croco Fur?",
+      "c": [
+        "Reiko Osa",
+        "Mariko Oki",
+        "Otsuko Share",
+        "Aiko Oni"
+      ]
+    },
+    {
+      "q": "What is the title of the final book in the Bullied Teacher series?",
+      "c": [
+        "The Final Lesson",
+        "Sensei's Friends",
+        "The Teacher's Courage",
+        "...And the Secret Room"
+      ]
+    },
+    {
+      "q": "Who is the world history teacher with the nickname \"Queen Tut\"?",
+      "c": [
+        "Sofue",
+        "Kondo",
+        "Hosoi",
+        "Yamada"
+      ]
+    },
+    {
+      "q": "Who is the English teacher who has only been outside the country once, and only for a week?",
+      "c": [
+        "Kondo",
+        "Sofue",
+        "Hosoi",
+        "Yamada"
+      ]
+    },
+    {
+      "q": "Who is the boy's P.E. teacher who always wears a red track suit?",
+      "c": [
+        "Kondo",
+        "Sofue",
+        "Hosoi",
+        "Yamada"
+      ]
+    },
+    {
+      "q": "Who is the contemporary writing teacher who teaches class with a hand puppet that his wife made for him?",
+      "c": [
+        "Hosoi",
+        "Sofe",
+        "Kondo",
+        "Yamada"
+      ]
+    },
+    {
+      "q": "Who is the plain teacher who teaches geography?",
+      "c": [
+        "Yamada",
+        "Sofue",
+        "Kondo",
+        "Hosoi"
+      ]
+    },
+    {
+      "q": "How much is a ganmodoki at Marukyu Tofu?",
+      "c": [
+        "200 yen",
+        "600 yen",
+        "300 yen",
+        "150 yen"
+      ]
+    },
+    {
+      "q": "Which of the following doesn't come out of the capsule machine in front of Shiroku Store?",
+      "c": [
+        "Bamboo Dragonfly",
+        "Firecracker",
+        "Pinwheel",
+        "Ball Lightning"
+      ]
+    },
+    {
+      "q": "On what day of the week is the normal Steak Bowl at Aiya not available?",
+      "c": [
+        "Tuesday",
+        "Saturday",
+        "Sunday",
+        "You can eat it every day"
+      ]
+    },
+    {
+      "q": "What is the name of the shrine located at the north side of the central shopping district?",
+      "c": [
+        "Tatsuhime Shrine",
+        "Inahime Shrine",
+        "Torahime Shrine",
+        "Yasogamihime Shrine"
+      ]
+    },
+    {
+      "q": "What vegetable does Daisuke of Yasogami High School's soccer team hate?",
+      "c": [
+        "Green Pepper",
+        "Carrot",
+        "Tomato",
+        "Cucumber"
+      ]
+    },
+    {
+      "q": "What is the 11th major tarot arcana?",
+      "c": [
+        "Strength",
+        "Chariot",
+        "Hermit",
+        "Devil"
+      ]
+    },
+    {
+      "q": "Out of the following, which item is the most expensive at Shiroku Store?",
+      "c": [
+        "Macca Leaf",
+        "Balm of Life",
+        "Medical Kit",
+        "Bead"
+      ]
+    },
+    {
+      "q": "Which of the following items is NOT sold at Shiroku Store?",
+      "c": [
+        "Peach Seed",
+        "San-Zun Tama",
+        "Royal Jelly",
+        "Segaki Rice"
+      ]
+    },
+    {
+      "q": "What effect does using an Orange Smash have?",
+      "c": [
+        "Recovers health",
+        "Cures poison",
+        "Cures enervation",
+        "Cures exhaustion"
+      ]
+    },
+    {
+      "q": "What is the name of the special meal at Aiya that you can have for free... if you manage to eat it all?",
+      "c": [
+        "Mega Beef Bowl",
+        "Mega Steak Bowl",
+        "Mega Fried Rice",
+        "Mega Mein"
+      ]
+    },
+    {
+      "q": "What ramen topping does Yasogami High soccer player Daisuke Nagase hate?",
+      "c": [
+        "Pickled bamboo shoots",
+        "Green onion",
+        "Narutomaki",
+        "Char siu"
+      ]
+    },
+    {
+      "q": "If you buy two Balms of Life and one Value Medicine, how much have you spent?",
+      "c": [
+        "11600 yen",
+        "12400 yen",
+        "9980 yen",
+        "13000 yen"
+      ]
+    },
+    {
+      "q": "There are many special classrooms at Yasogami High School. Which of these is NOT on the Practice Building's 1st floor?",
+      "c": [
+        "Art room",
+        "Science Lab",
+        "Music room",
+        "Sewing room"
+      ]
+    },
+    {
+      "q": "What item do you need to catch the Guardian?",
+      "c": [
+        "Angler's Set",
+        "Fish Fishing Set",
+        "Guardian Set",
+        "Fisherman's Set"
+      ]
+    },
+    {
+      "q": "What color and pattern hood does the lady at Shiroku Store wear?",
+      "c": [
+        "Red polka dots",
+        "Red plaid",
+        "Blue polka dots",
+        "Blue plaid"
+      ]
+    },
+    {
+      "q": "Ryotaro Dojima is never without his suit. What color necktie does he wear?",
+      "c": [
+        "Plain red",
+        "Plain blue",
+        "Yellow striped",
+        "Blue striped"
+      ]
+    },
+    {
+      "q": "How many days were forecast to be clear the entire day during the month of May?",
+      "c": [
+        "6",
+        "10",
+        "8",
+        "4"
+      ]
+    },
+    {
+      "q": "What was the name of the hotel in Seaside City that the class stayed in on the trip to Tatsumi Port Island?",
+      "c": [
+        "Clamshell Inn",
+        "Yellowtail Inn",
+        "Oyster Inn",
+        "Beachfront Inn"
+      ]
+    },
+    {
+      "q": "Who is the student council president of Gekkoukan High School?",
+      "c": [
+        "Chihiro Fushimi",
+        "Chihaya Fushimi",
+        "Chihiro Fukumi",
+        "Chihaya Fukumi"
+      ]
+    },
+    {
+      "q": "What was the name of the teacher who gave you the special lecture at Gekkoukan High School?",
+      "c": [
+        "Edogawa",
+        "Namikawa",
+        "Tonegawa",
+        "Akutagawa"
+      ]
+    },
+    {
+      "q": "What was the name of the character Shadow Mitsuo transformed into?",
+      "c": [
+        "Mitsuo the Hero",
+        "Mitsuo the Chosen",
+        "Mitsuo the Greatest",
+        "Mitsuo the Mighty"
+      ]
+    },
+    {
+      "q": "What is the name of the spell Shadow Mitsuo uses?",
+      "c": [
+        "Gigadyne",
+        "Mahadyne",
+        "Megadyne",
+        "Gigapulse"
+      ]
+    },
+    {
+      "q": "What was on Shadow Naoto's back?",
+      "c": [
+        "Airplane wings",
+        "A rocket booster",
+        "A giant cannon",
+        "All-purpose backpack"
+      ]
+    },
+    {
+      "q": "What was the name of the laser beam that Shadow Naoto shot from her gun?",
+      "c": [
+        "Mute Ray",
+        "Panic Ray",
+        "Destructo Ray",
+        "Anti-Matter Ray"
+      ]
+    },
+    {
+      "q": "What item did you need to open the sealed door in the Void Quest?",
+      "c": [
+        "Orb of Darkness",
+        "Orb of Light",
+        "Crest of Courage",
+        "The Final Key"
+      ]
+    },
+    {
+      "q": "What were the floors called in the Void Quest?",
+      "c": [
+        "Chapter",
+        "Level",
+        "Book",
+        "Stage"
+      ]
+    },
+    {
+      "q": "Many symbols are shown on the walls of the Void Quest. What hangs above the doorways that lead to stairs?",
+      "c": [
+        "Sword",
+        "Shield",
+        "Bow and arrow",
+        "Axe"
+      ]
+    },
+    {
+      "q": "What color flowers grow at the entrance to the Void Quest?",
+      "c": [
+        "Blue",
+        "Red",
+        "Yellow",
+        "Black"
+      ]
+    },
+    {
+      "q": "Which of the following is a character on the popular kid's show, \"Featherman R\"?",
+      "c": [
+        "Feather Crow",
+        "Feather Horned Owl",
+        "Feather Hawk",
+        "Feather Swan"
+      ]
+    },
+    {
+      "q": "Kids love the TV show \"____ ____ Featherman R.\" What goes in the blanks?",
+      "c": [
+        "Phoenix Rangers",
+        "Birdsong Heroes",
+        "Flying Rangers",
+        "Phoenix Heroes"
+      ]
+    },
+    {
+      "q": "Who is the leader of the Phoenix Rangers on the popular children's show \"Featherman R\"?",
+      "c": [
+        "Feather Hawk",
+        "Feather Condor",
+        "Feather Parakeet",
+        "Feather Swan"
+      ]
+    },
+    {
+      "q": "Who is the youngest member of the Phoenix Rangers on the popular children's show \"Featherman R?\"",
+      "c": [
+        "Feather Swan",
+        "Feather Condor",
+        "Feather Parakeet",
+        "Feather Hawk"
+      ]
+    },
+    {
+      "q": "What was Yosuke holding at the Summer Festival on August 20?",
+      "c": [
+        "Corn on the cob",
+        "Cotton candy",
+        "Shaved Ice",
+        "Grilled squid"
+      ]
+    },
+    {
+      "q": "Teddie had cats on both sides of him when he appeared in front of the school trip's hotel. What color was the left cat?",
+      "c": [
+        "Black and white",
+        "Pure black",
+        "Tiger-striped",
+        "Calico"
+      ]
+    },
+    {
+      "q": "Who is the shortest of the girls on the Investigation Team?",
+      "c": [
+        "Naoto",
+        "Chie",
+        "Yukiko",
+        "Rise"
+      ]
+    },
+    {
+      "q": "What color swimsuit did Kanji wear on the trip to the beach on August 23?",
+      "c": [
+        "Black",
+        "Gold",
+        "White",
+        "He didn't wear one"
+      ]
+    },
+    {
+      "q": "What is written on the back of Chie's bike helmet?",
+      "c": [
+        "29",
+        "Meat",
+        "Satonaka",
+        "Dragon"
+      ]
+    },
+    {
+      "q": "What is the color and pattern of Naoto's summer necktie?",
+      "c": [
+        "Plain yellow",
+        "Plain red",
+        "Yellow polka dots",
+        "Red polka dots"
+      ]
+    },
+    {
+      "q": "Kanji is too young to get a vehicle license, so he had to ride a bike to the beach. What kind of bike did he have?",
+      "c": [
+        "City bike",
+        "Mountain bike",
+        "Electric motor bike",
+        "Tricycle"
+      ]
+    },
+    {
+      "q": "During the \"Miss\" Yasogami Pageant, Yosuke was given a catch phrase. What was part of it?",
+      "c": [
+        "Pure disappointment",
+        "Pure letdown",
+        "Pure discouragement",
+        "Pure disgust"
+      ]
+    },
+    {
+      "q": "During the \"Miss\" Yasogami Pageant, Kanji was given a catch phrase. What was it?",
+      "c": [
+        "Runaway express train",
+        "Speeding express train",
+        "Violent express train",
+        "Speeding train"
+      ]
+    },
+    {
+      "q": "During the \"Miss\" Yasogami Pageant, Teddie was given a catch phrase: \"King of the...\" what?",
+      "c": [
+        "TV World",
+        "Wonderland",
+        "Fairytale Land",
+        "Inaba Kingdom"
+      ]
+    },
+    {
+      "q": "What color swimsuit did Hanako Ohtani wear during the Miss Yasogami Pageant?",
+      "c": [
+        "Pink",
+        "Red",
+        "White",
+        "Black"
+      ]
+    },
+    {
+      "q": "What color afro does the host of the \"Miss\" Yasogami Pageant have?",
+      "c": [
+        "Pink",
+        "Red",
+        "Gold",
+        "Black"
+      ]
+    },
+    {
+      "q": "What did Class 2-1 do for Yasogami High's Culture Festival?",
+      "c": [
+        "A play",
+        "A haunted mansion",
+        "A dango shop",
+        "A group date cafe"
+      ]
+    },
+    {
+      "q": "Yosuke named the Christmas Cake made by the girls: \"_____: Christmas Edition\". Fill in the blank.",
+      "c": [
+        "Mystery Food X",
+        "Massacre Machine",
+        "Ghost of Christmas Pastry",
+        "FAILCAKE"
+      ]
+    },
+    {
+      "q": "If you were watching the band show at Junes on October 10th, who would be on the far right of the stage?",
+      "c": [
+        "Naoto",
+        "Yukiko",
+        "Kanji",
+        "Rise"
+      ]
+    },
+    {
+      "q": "What was the distinguishing feature of the fortune teller at the Yasogami High Culture Festival?",
+      "c": [
+        "Long nose",
+        "Long hair",
+        "Big nose",
+        "Blue nose"
+      ]
+    },
+    {
+      "q": "Ms. Sofue, AKA \"Queen Tut,\" always carries a rod. Which hand does she carry it with?",
+      "c": [
+        "Right",
+        "Left",
+        "Both",
+        "She doesn't have a rod"
+      ]
+    },
+    {
+      "q": "What shape was the hairpin Yosuke wore during the \"Miss\" Yasogami Pageant?",
+      "c": [
+        "Strawberries",
+        "White roses",
+        "Cherries",
+        "Red roses"
+      ]
+    },
+    {
+      "q": "What hospital room number was Namatame being held in?",
+      "c": [
+        "209",
+        "309",
+        "109",
+        "409"
+      ]
+    },
+    {
+      "q": "What was the name of the Shadow you fought in Heaven to save Nanako-chan?",
+      "c": [
+        "Kunino-sagiri",
+        "Kumono-sagiri",
+        "Kumano-ookami",
+        "Kurano-Kaguzuchi"
+      ]
+    },
+    {
+      "q": "What was the Shadow you fought at \"Magatsu Mandala World 6\"?",
+      "c": [
+        "Envious Giant",
+        "Thirsting Giant",
+        "Destructive Giant",
+        "Victorious Giant"
+      ]
+    },
+    {
+      "q": "What color were the unlocked treasure chests in Heaven?",
+      "c": [
+        "Blue",
+        "Red",
+        "Green",
+        "White"
+      ]
+    },
+    {
+      "q": "What symbol is found on the doors in Heaven?",
+      "c": [
+        "Lion",
+        "Panther",
+        "Elephant",
+        "Dragon"
+      ]
+    },
+    {
+      "q": "What color are the signals at the dead ends of Magatsu Inaba?",
+      "c": [
+        "Red",
+        "Green",
+        "Yellow",
+        "White"
+      ]
+    },
+    {
+      "q": "How many angel statues are there on Heaven's top floor?",
+      "c": [
+        "13",
+        "8",
+        "12",
+        "18"
+      ]
+    },
+    {
+      "q": "The entrance to Magatsu Inaba is known as the \"Desolate Bedroom.\" Which color paint is NOT used in that room?",
+      "c": [
+        "Blue",
+        "Red",
+        "Yellow",
+        "White"
+      ]
+    },
+    {
+      "q": "To attract customers for the group date cafe, you pretended to be customers. Who sat across from Chie?",
+      "c": [
+        "Kanji",
+        "Yosuke",
+        "Male class rep",
+        "Yukiko"
+      ]
+    },
+    {
+      "q": "What effect does the skill Debilitate have?",
+      "c": [
+        "Lowers 1 foe's abilities",
+        "Raises 1 ally's abilities",
+        "Random damage to foes",
+        "Random effect"
+      ]
+    },
+    {
+      "q": "The skill \"Seal Bomb\" does medium physical damage to all foes, as well as causes an ailment. Which is it?",
+      "c": [
+        "Silence",
+        "Enervation",
+        "Rage",
+        "Exhaustion"
+      ]
+    },
+    {
+      "q": "The skill \"Navas Nebula\" does medium physical damage to all foes, as well as causes an ailment. Which is it?",
+      "c": [
+        "Exhaustion",
+        "Poison",
+        "Enervation",
+        "Silence"
+      ]
+    },
+    {
+      "q": "The skills \"Patra\" and \"Me Patra\" can heal most status ailments. Which of the following can they NOT heal?",
+      "c": [
+        "Poison",
+        "Panic",
+        "Fear",
+        "Rage"
+      ]
+    },
+    {
+      "q": "Which of the following status ailments can be cured by the \"Mutudi\" skill?",
+      "c": [
+        "Mute",
+        "Exhaustion",
+        "Envervation",
+        "Panic"
+      ]
+    },
+    {
+      "q": "What skill raises one ally's critical hit rate?",
+      "c": [
+        "Rebellion",
+        "Revolution",
+        "Rakukaja",
+        "Dekaja"
+      ]
+    },
+    {
+      "q": "What skill allows the party to escape from most battles?",
+      "c": [
+        "Trafuri",
+        "Traesto",
+        "Amrita",
+        "Re Patra"
+      ]
+    },
+    {
+      "q": "Which skill allows party members to get back up after being knocked down?",
+      "c": [
+        "Re Patra",
+        "Amrita",
+        "Salvation",
+        "Recarm"
+      ]
+    }
+  ]
 }

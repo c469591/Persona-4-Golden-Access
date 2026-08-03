@@ -72,6 +72,9 @@ public class Mod : ModBase // <= Do not Remove.
     private VelvetFusion _velvetFusion;
     private Components.CompendiumInfoText _compInfoText;   // TEMP diag — rooted (hook delegate)
     private Components.GameOverReader _gameOverReader;      // game-over monologue — rooted (hook delegate)
+    private Components.WeatherNews _weatherNews;            // TV weekly-forecast panel (J/L browse)
+    private Components.MiracleQuiz _miracleQuiz;            // Miracle Quiz questions/choices/cursor
+    private Components.TelopReader _telopReader;            // fnt_telop caption scenes (quiz intro/banter)
 #if DEBUG
     private Components.UiTextSpy _uiTextSpy;                // F9 battle recon — rooted (hook delegate)
 #endif
@@ -231,6 +234,10 @@ public class Mod : ModBase // <= Do not Remove.
         _compInfoText = new Components.CompendiumInfoText(_hooks!);
         // Game-over Velvet Room monologue (task evtGameOver + verbatim glyph capture)
         _gameOverReader = new Components.GameOverReader(_hooks!);
+        // TV Weather News weekly forecast (task weather_spr + our own schedule data; J/L browse)
+        _weatherNews = new Components.WeatherNews();
+        _miracleQuiz = new Components.MiracleQuiz();
+        _telopReader = new Components.TelopReader();
 #if DEBUG
         // UiTextSpy recon (F9, BATTLE-ONLY arm so the old RoomActionMenu Ctrl+F9
         // collision can't happen): 2026-07-11 color-capture upgrade for the

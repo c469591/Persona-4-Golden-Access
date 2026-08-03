@@ -287,6 +287,80 @@ internal unsafe class ShopMenu
     // the on-screen move). The old reader read the wrong list (player inventory at
     // +0x10) — gone. Announces "name, qty. price yen. description".
     private int _lastSellRow = -1;
+
+    // ── The GOLDEN sell screen's task work (fcl_shop_base) — 2026-07-30 ─────
+    // Named-task registry walk (the TvListings/WeatherNews pattern; non-NUL
+    // terminator rule). The work struct holds the REAL cursor: window row
+    // +0x32, scroll +0x34 (pShop's own cursors are window-relative and freeze
+    // once the list scrolls). Cached per sell-screen visit.
+    private static readonly nint[] SellTaskHeads =
+    {
+        unchecked((nint)0x1462486F8L),
+        unchecked((nint)0x1462486A8L),
+        unchecked((nint)0x146248768L),
+    };
+    private static readonly byte[] SellTaskName = System.Text.Encoding.ASCII.GetBytes("fcl_shop_base");
+    private nint _sellWorkCache;
+
+    private nint FindShopBaseWork()
+    {
+        // Validate the cache each poll (one guarded read) — the task dies with the screen.
+        if (_sellWorkCache != 0 && IsReadable(_sellWorkCache + 0x04, 2)
+            && *(ushort*)(_sellWorkCache + 0x04) == ST_SELL)
+            return _sellWorkCache;
+        _sellWorkCache = 0;
+        foreach (nint head in SellTaskHeads)
+        {
+            if (!IsReadable(head, 8)) continue;
+            nint node = *(nint*)head;
+            for (int i = 0; i < 512 && node != 0; i++)
+            {
+                if (!IsReadable(node, 0x58)) break;
+                bool match = true;
+                for (int k = 0; k < SellTaskName.Length; k++)
+                    if (*(byte*)(node + k) != SellTaskName[k]) { match = false; break; }
+                if (match && *(byte*)(node + SellTaskName.Length) < 0x20)
+                {
+                    nint work = *(nint*)(node + 0x48);
+                    if (work != 0) { _sellWorkCache = work; return work; }
+                }
+                node = *(nint*)(node + 0x50);
+            }
+        }
+        return 0;
+    }
+
+    // ── Q/E category tabs (baked art) — announce on list rebuild ────────────
+    // A tab switch rebuilds pShop's list; key on (count, first item id) and
+    // classify the category from the item-id block. "Sell all" (row 0) carries
+    // the category block-base id itself, so classify from list[1] when present.
+    private long _lastSellCatKey;
+    private bool _saidNothingToSell;
+    private void AnnounceSellCategoryChange(ShopStruct* pShop)
+    {
+        nint p = (nint)pShop;
+        if (!IsReadable(p + 0x60, 8) || !IsReadable(p + 0x68, 4)) return;
+        nint list = *(nint*)(p + 0x60);
+        int count = *(int*)(p + 0x68);
+        if (list == 0 || count <= 0 || !IsReadable(list, 0x28)) return;
+        ushort probeId = count > 1 && IsReadable(list + 0x14 + 4, 2)
+            ? *(ushort*)(list + 0x14 + 4)      // first real item (row 1)
+            : *(ushort*)(list + 4);            // single-row list: the Sell-all base id
+        long key = ((long)count << 16) | probeId;
+        if (key == _lastSellCatKey) return;
+        bool first = _lastSellCatKey == 0;     // screen just opened — row 0 announces anyway
+        _lastSellCatKey = key;
+        if (first) return;
+        string cat = probeId < 256 ? "Weapons"
+            : probeId < 512 ? "Armor"
+            : probeId < 768 ? "Accessories"
+            : probeId < 1024 ? "Expendables"
+            : "Materials";
+        Log($"[ShopMenu] Sell tab -> {cat} (count={count} probeId={probeId})");
+        Speech.Say(cat, true);
+        _lastSellRow = -1;                     // re-announce the new tab's row 0
+    }
+
     private bool AnnounceSellCursor(ShopStruct* pShop, int index)
     {
         nint p = (nint)pShop;
@@ -890,17 +964,69 @@ internal unsafe class ShopMenu
                     OnStateChanged(ptr, prev, state);
                 }
 
-                // SELL screen (0x12): announce the highlighted item as the cursor
-                // (pShop+0x32) moves through the sell list (*(pShop+0x60)).
+                // SELL screen (0x12) — REBUILT 2026-07-30 on the GOLDEN sell screen's OWN
+                // struct (the user's "first items read, then silence"): every pShop cursor
+                // (+0x32, +0x9E) is WINDOW-relative here and freezes once the list scrolls
+                // (the 06-18 verification never scrolled — short early inventory). The
+                // screen runs as named task **fcl_shop_base**; its WORK struct carries
+                // (live-verified via the 4-snap scroll hunt, window row 4 / scroll 3):
+                //   +0x04 u16 = 0x12 (sell state mirror) · +0x32 u16 = WINDOW row ·
+                //   +0x34 u16 = SCROLL (top row) · +0x68 int = row count (43 materials).
+                // TRUE row = window + scroll — indexes pShop's own list at *(+0x60) 1:1.
+                // Falls back to the old window cursor if the task is missing (never worse
+                // than before). Q/E tab switches rebuild the list; the count+firstId change
+                // re-announces the new category (classified from the item-id block — the
+                // tabs themselves are baked art).
                 if (_shopState == ST_SELL)
                 {
-                    int sellRow = *(short*)((nint)ptr + 0x32);
-                    // Latch only once the announce actually succeeds — the list can
-                    // be null for a frame or two while the screen builds.
-                    if (sellRow != _lastSellRow && AnnounceSellCursor(ptr, sellRow))
-                        _lastSellRow = sellRow;
+                    nint work = FindShopBaseWork();
+                    // EMPTY TAB (user 2026-07-30, post-sell-everything): the game shows
+                    // "There is nothing to sell." but the stale list kept announcing the
+                    // old rows. Trust EITHER count reading empty; announce once per visit.
+                    int workCount = work != 0 && IsReadable(work + 0x68, 4) ? *(int*)(work + 0x68) : -1;
+                    int shopCount = IsReadable((nint)ptr + 0x68, 4) ? *(int*)((nint)ptr + 0x68) : -1;
+                    if (workCount == 0 || shopCount == 0)
+                    {
+                        if (!_saidNothingToSell)
+                        {
+                            _saidNothingToSell = true;
+#if DEBUG
+                            Log($"[SellDiag] EMPTY tab (workCount={workCount} shopCount={shopCount})");
+#endif
+                            Speech.Say("Nothing to sell.", true);
+                        }
+                        _lastSellRow = -1;
+                    }
+                    else
+                    {
+                        _saidNothingToSell = false;
+                        int sellRow;
+                        if (work != 0 && IsReadable(work + 0x30, 8))
+                        {
+                            int win = *(ushort*)(work + 0x32);
+                            int scroll = *(ushort*)(work + 0x34);
+                            sellRow = win + scroll;
+#if DEBUG
+                            if (sellRow != _lastSellRow)
+                                Log($"[SellDiag] win={win} scroll={scroll} -> row={sellRow}");
+#endif
+                        }
+                        else
+                        {
+                            sellRow = *(short*)((nint)ptr + 0x32);
+#if DEBUG
+                            if (sellRow != _lastSellRow)
+                                Log($"[SellDiag] NO fcl_shop_base work — window-cursor fallback row={sellRow}");
+#endif
+                        }
+                        AnnounceSellCategoryChange(ptr);
+                        // Latch only once the announce actually succeeds — the list can
+                        // be null for a frame or two while the screen builds.
+                        if (sellRow != _lastSellRow && AnnounceSellCursor(ptr, sellRow))
+                            _lastSellRow = sellRow;
+                    }
                 }
-                else _lastSellRow = -1;
+                else { _lastSellRow = -1; _lastSellCatKey = 0; _saidNothingToSell = false; }
 
                 bool inBuy = InBuyFlow(_shopState);
                 bool safeInList = _shopState is 0x0A or 0x0B

@@ -82,7 +82,7 @@ internal sealed unsafe class TvListingsReader
     private IHook<SetTextDelegate>? _textHook;
     private long _captureFrom, _captureUntil;      // TickCount64 window
     private readonly object _capLock = new();
-    private readonly List<(string s, byte p2, byte p3, uint p4, bool glyph)> _captured = new();
+    private readonly List<(string s, byte p2, byte p3, uint p4, bool glyph, long t)> _captured = new();
 
     internal TvListingsReader(IReloadedHooks hooks)
     {
@@ -100,8 +100,11 @@ internal sealed unsafe class TvListingsReader
     private nint OnText(nint p1, byte p2, byte p3, uint p4, byte p5, nint p6)
     {
         nint ret = _textHook!.OriginalFunction(p1, p2, p3, p4, p5, p6);
+        long t0 = PerfDiag.Begin();
         try
         {
+            // The art gallery has its own capture machine (interleave-safe, repaint-aware).
+            if (_artActive) { ArtCapture(p1, p2, p6); return ret; }
             long now = Environment.TickCount64;
             if (now < _captureFrom || now >= _captureUntil) return ret;
             if (p6 == 0)
@@ -116,6 +119,7 @@ internal sealed unsafe class TvListingsReader
                 // line object in p6) — the description panels render this way.
                 lock (_capLock)
                 {
+                    _lastCapActivity = Environment.TickCount64;
                     if (p6 != _glyphObj) { FlushGlyphLine(); _glyphObj = p6; _glyphP2 = p2; }
                     string g = ReadCStrSafe(p1, 8);
                     _glyphLine.Append(g.Length > 0 ? g : " ");
@@ -124,6 +128,7 @@ internal sealed unsafe class TvListingsReader
             }
         }
         catch { /* never throw from a hook */ }
+        finally { PerfDiag.End(PerfDiag.B.TvCap, t0); }
         return ret;
     }
 
@@ -139,11 +144,17 @@ internal sealed unsafe class TvListingsReader
     {
         lock (_capLock)
         {
+            _lastCapActivity = Environment.TickCount64;
             foreach (var c in _captured)
                 if (c.s == s) return;                // dedupe across frames
-            _captured.Add((s, p2, p3, p4, glyph));
+            _captured.Add((s, p2, p3, p4, glyph, Environment.TickCount64));
         }
     }
+
+    // Last moment ANY capture activity happened — including single GLYPHS still
+    // streaming into the pending line (the art settle-detector must not flush a
+    // half-painted caption: "Initial" once split as "Initi"+"al", user 2026-07-31).
+    private long _lastCapActivity;
 
     /// <summary>Capture draws inside [now+delay, now+delay+len) — the delay
     /// skips the scroll/slide animation so only the SETTLED frame is read.</summary>
@@ -173,6 +184,7 @@ internal sealed unsafe class TvListingsReader
     {
         if (TickMusic()) return;   // song list open — it owns the announcements
         if (TickAnime()) return;   // episode carousel open
+        if (TickArt()) return;     // Soejima art gallery open
 
         nint task = FindTask();
         if (task == 0)
@@ -354,6 +366,210 @@ internal sealed unsafe class TvListingsReader
         return true;
     }
 
+    // ── The Soejima ART GALLERY ("Giants of P", task ART_CHANNEL) — 2026-07-31 ──
+    // Its own work struct is ALL ZEROS and the guide work doesn't move with the
+    // picture (both live-probed), so there is no readable cursor. But the CAPTION
+    // ("Chie Satonaka / Initial design draft") is DRAWN TEXT — so the reader
+    // triggers a capture window on the browse keys (Up/Down = "Pic") and speaks
+    // the caption the game itself draws after the carousel settles. Ghost-key
+    // guard on entry (the confirm press that opened the gallery is still down).
+    private static readonly byte[] ArtTaskName = Encoding.ASCII.GetBytes("ART_CHANNEL");
+    private volatile bool _artActive;   // read by the RENDER hook, written by the poll thread
+    private bool _artUpWas, _artDownWas;
+    private const int VK_UP = 0x26, VK_DOWN = 0x28;
+
+    private bool TickArt()
+    {
+        nint task = FindTaskByName(ArtTaskName);
+        if (task == 0)
+        {
+            if (_artActive) _artActive = false;
+            return false;
+        }
+        if (!_artActive)
+        {
+            _artActive = true;
+            _artEntryRead = false;
+            _artUpWas = IsKeyDown(VK_UP);
+            _artDownWas = IsKeyDown(VK_DOWN);
+            Speech.Say("Art gallery. Up and down to browse the pictures.", true);
+            BeginArtCapture();
+            return true;
+        }
+        bool up = IsKeyDown(VK_UP), down = IsKeyDown(VK_DOWN);
+        bool upEdge = up && !_artUpWas, downEdge = down && !_artDownWas;
+        _artUpWas = up; _artDownWas = down;
+        // Presses during the OPENING ANIMATION are ignored by the game — ignore them
+        // too (user 2026-07-31: an early press started a bogus round that misread,
+        // then re-read). Browsing arms once the entry read has landed.
+        if ((upEdge || downEdge) && _artEntryRead) BeginArtCapture();
+        // (Dead reckoning / learned position maps are DEAD ENDS here: key REPEAT
+        // auto-scrolls several pictures per key EDGE, so any self-tracked position
+        // drifts — correction-trail-proven 2026-07-31. The vote IS the announcer.)
+        ArtFlush();
+        return true;
+    }
+
+    private bool _artEntryRead;
+
+    // Stability model (v2 — the fixed window was BOTH slow and lossy, user 2026-07-31):
+    // the capture net stays open for seconds (a late caption can't be missed) and the
+    // announce fires as soon as the paint SETTLES (~230ms without a new string) — as
+    // fast as the game, never slower than it. The slide redraws the OLD caption first,
+    // so only the LAST paint burst (per-entry timestamps, >280ms gaps split bursts)
+    // is spoken.
+    // ── The art capture machine (v4, 2026-07-31) — built for THIS renderer's truths:
+    // the caption REPAINTS EVERY FRAME (settle-detection on silence never fires), its
+    // glyph lines INTERLEAVE character-by-character across row objects (flushing on
+    // object switch shreds words — "Protagonist's|initial"), and the OLD caption keeps
+    // redrawing during the slide (content-based exclusion, not time windows).
+    //  - per line-OBJECT accumulator; an append after a >100ms gap = a NEW repaint pass
+    //    → the previous pass's text is stashed as that line's COMPLETE text.
+    //  - composed caption = complete lines in first-seen order + recent full strings,
+    //    minus legend labels, minus the PREVIOUS caption's lines.
+    //  - spoken when the composition is nonempty and identical on two consecutive polls.
+    // The caption's TWO lines each repaint WHOLE every frame, alternating objects
+    // (ArtDiag-proven: ~900 chars/s of repeats, 0-16ms gaps — no timing can split
+    // passes). So: flush ON THE OBJECT SWITCH (always yields a complete line),
+    // DEDUPE the 60/s repeats, and speak once no NEW distinct line has appeared
+    // for a beat. The one impurity — a partial line caught mid-frame at the
+    // keypress clear — is dropped at compose time (it's a suffix of a full line).
+    private readonly List<string> _artSeen = new();               // distinct lines, draw order
+    private readonly HashSet<string> _artSeenSet = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _artPrevPieces = new(StringComparer.Ordinal);
+    private readonly StringBuilder _artCurSb = new();
+    private nint _artCurObj = -1;
+    private long _artLastNew;
+    private bool _artSpoken;
+    private long _artKeyTick;
+
+    private void BeginArtCapture()
+    {
+        lock (_capLock)
+        {
+            // FINALIZE the round being abandoned (fast browsing, 2026-07-31): if its
+            // caption was identified but never spoken, adopt it as "where we were" —
+            // otherwise that caption redraws into the NEW round and speaks one picture
+            // LATE ("read Yosuke while standing on the Protagonist").
+            if (!_artSpoken && _artSeen.Count > 0)
+            {
+                var (rec, score, _) = ArtVote(_artSeen.ToArray(), _artPrevRecord);
+                if (rec >= 0 && score >= 1) _artPrevRecord = rec;
+            }
+            _artSeen.Clear();
+            _artSeenSet.Clear();
+            _artCurSb.Clear();
+            _artCurObj = -1;
+        }
+        _artSpoken = false;
+        _artKeyTick = _artLastNew = Environment.TickCount64;
+    }
+
+    /// <summary>The table vote: (bestRecord, score, latestDrawPos); prevRecord excluded.</summary>
+    private (int rec, int score, int pos) ArtVote(string[] seen, int exclude)
+    {
+        int Pos(string s)
+        {
+            for (int i = seen.Length - 1; i >= 0; i--)
+                if (seen[i] == s || seen[i].EndsWith(s) || s.EndsWith(seen[i])) return i;
+            return -1;
+        }
+        int best = -1, bestScore = 0, bestPos = -1;
+        for (int r = 0; r < _artCaps.Count; r++)
+        {
+            if (r == exclude) continue;
+            int p1 = Pos(_artCaps[r].l1), p2 = _artCaps[r].l2.Length > 0 ? Pos(_artCaps[r].l2) : -1;
+            int score = (p1 >= 0 ? 1 : 0) + (p2 >= 0 ? 1 : 0);
+            int latest = Math.Max(p1, p2);
+            if (score > bestScore || (score == bestScore && score > 0 && latest > bestPos))
+            { best = r; bestScore = score; bestPos = latest; }
+        }
+        return (best, bestScore, bestPos);
+    }
+
+    /// <summary>OnText routing while the gallery is open (instead of AddCaptured).</summary>
+    private void ArtCapture(nint strPtr, byte p2, nint p6)
+    {
+        if (p6 == 0) return;                       // fulls here = the legend labels only
+        string g = ReadCStrSafe(strPtr, 8);
+        lock (_capLock)
+        {
+            if (p6 != _artCurObj)
+            {
+                if (_artCurSb.Length > 0)
+                {
+                    string s = _artCurSb.ToString().Trim();
+                    _artCurSb.Clear();
+                    if (s.Length >= 2 && _artSeenSet.Add(s))
+                    {
+                        _artSeen.Add(s);
+                        _artLastNew = Environment.TickCount64;
+                    }
+                }
+                _artCurObj = p6;
+            }
+            _artCurSb.Append(g.Length > 0 ? g : " ");
+        }
+    }
+
+    // The offline caption TABLE (artCh.arc CH_ART_DETAILNNN records → catalog
+    // "art_captions", strip order): captured fragments only need to IDENTIFY the
+    // record — the announcement is the table's FULL caption + position. Immune to
+    // shared lines, partial captures, and the old caption's redraws.
+    private readonly List<(string l1, string l2, string full)> _artCaps = new();
+    private int _artPrevRecord = -1;
+
+    private void ArtFlush()
+    {
+        long now = Environment.TickCount64;
+        string[] seen;
+        long lastNew;
+        lock (_capLock) { seen = _artSeen.ToArray(); lastNew = _artLastNew; }
+
+        if (_artSpoken) return;
+
+        if (seen.Length == 0)
+        {
+            if (now - _artKeyTick > 1500) { _artSpoken = true; _artEntryRead = true; Speech.Say("No new caption.", true); }
+            return;
+        }
+
+        var (best, bestScore, _) = ArtVote(seen, _artPrevRecord);
+
+        // A FULL two-line match (with the old picture excluded) can only be the
+        // destination — speak IMMEDIATELY, no settle wait (browsing-pace latency fix).
+        // Weaker matches wait out the settle window for more lines to arrive.
+        if (bestScore < 2 && now - lastNew < 220) return;
+
+        if (best < 0)
+        {
+            // No table match (unknown line / no table loaded): raw fallback.
+            var raw = new List<string>();
+            foreach (var s in seen) if (!IsButtonLabel(s)) raw.Add(s);
+            if (raw.Count == 0)
+            {
+                if (now - _artKeyTick > 1500) { _artSpoken = true; _artEntryRead = true; Speech.Say("No new caption.", true); }
+                return;
+            }
+            _artSpoken = true; _artEntryRead = true;
+            string composedRaw = string.Join(", ", raw);
+            Log($"[TvList] art say (raw): {composedRaw}");
+            Speech.Say(composedRaw + ".", true);
+            return;
+        }
+
+        _artSpoken = true; _artEntryRead = true;
+        _artPrevRecord = best;
+        string composed = $"{_artCaps[best].full}. {best + 1} of {_artCaps.Count}";
+        Log($"[TvList] art say: {composed}");
+        Speech.Say(composed + ".", true);
+    }
+
+    private static bool IsKeyDown(int vKey) => (GetAsyncKeyState(vKey) & 0x8000) != 0;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
+
     private char _pendingKind;
     private long _announceAt;
 
@@ -365,7 +581,7 @@ internal sealed unsafe class TvListingsReader
         _pendingKind = (char)0;
         lock (_capLock) FlushGlyphLine();
 
-        (string s, byte p2, byte p3, uint p4, bool glyph)[] cap;
+        (string s, byte p2, byte p3, uint p4, bool glyph, long t)[] cap;
         lock (_capLock) cap = _captured.ToArray();
         if (cap.Length == 0) return;
 
@@ -397,7 +613,7 @@ internal sealed unsafe class TvListingsReader
         }
         else
         {
-            return; // music no longer uses capture (direct array read)
+            return; // music = direct array read; the art gallery has its own ArtFlush
         }
         if (text.Length == 0) return;
         Log($"[TvList] {kind} state={state} cursor={cursor} say: {text}");
@@ -409,7 +625,7 @@ internal sealed unsafe class TvListingsReader
         switch (s)
         {
             case "Zoom": case "Back": case "Music": case "Movie":
-            case "Back to movie": case "OK":
+            case "Back to movie": case "OK": case "Pic":
                 return true;
         }
         return false;
@@ -494,6 +710,15 @@ internal sealed unsafe class TvListingsReader
                         list.Add(s.GetString() ?? "");
                     _musicPlaylists[int.Parse(p.Name)] = list;
                 }
+            if (root.TryGetProperty("art_captions", out var arts))
+                foreach (var a in arts.EnumerateArray())
+                {
+                    string full = a.GetString() ?? "";
+                    int comma = full.IndexOf(", ", StringComparison.Ordinal);
+                    _artCaps.Add(comma > 0
+                        ? (full.Substring(0, comma), full.Substring(comma + 2), full)
+                        : (full, "", full));
+                }
             if (root.TryGetProperty("anime_episodes", out var eps))
                 foreach (var e in eps.EnumerateArray())
                 {
@@ -516,19 +741,7 @@ internal sealed unsafe class TvListingsReader
     }
 
     /// <summary>ASCII c-string read with full page validation (hook-safe).</summary>
-    private static string ReadCStrSafe(nint p, int maxLen)
-    {
-        if (p == 0 || !IsReadable(p, 1)) return "";
-        var sb = new StringBuilder(maxLen);
-        for (int i = 0; i < maxLen; i++)
-        {
-            if ((i & 0xF) == 0 && !IsReadable(p + i, 16)) break;
-            byte b = *(byte*)(p + i);
-            if (b == 0) break;
-            if (b >= 0x20 && b < 0x7F) sb.Append((char)b);
-        }
-        return sb.ToString();
-    }
+    private static string ReadCStrSafe(nint p, int maxLen) => ReadCStringRpm(p, maxLen);  // RPM since 2026-07-27 (menu-heaviness fix: VirtualQuery stalls under allocator contention)
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);

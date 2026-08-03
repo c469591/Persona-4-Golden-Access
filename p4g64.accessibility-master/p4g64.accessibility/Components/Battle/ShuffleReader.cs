@@ -112,6 +112,7 @@ internal sealed unsafe class ShuffleReader
     // (If the check ever broke, the failure mode is mild: ShuffleText's no-struct
     // panel announcer still reads every card by name.)
     private bool _taskWasAlive;
+    private bool _stuck17Logged;   // one tripwire log per stuck-state-17 occurrence (heaviness bug)
 
     public ShuffleReader()
     {
@@ -130,6 +131,24 @@ internal sealed unsafe class ShuffleReader
             try
             {
                 int state = CurrentState();
+                // ★ THE MENU-HEAVINESS BUG (user-reported, root-caused 2026-07-27): some battle
+                // teardowns leave the manager's state word AT 17, so this flag stuck TRUE for the
+                // rest of the session and ShuffleText did per-string capture work on EVERY text
+                // draw in EVERY screen — per-frame text-heavy menus (velvet fusion lists, the
+                // skill-replace grid) turned "heavy" until the next battle/reload rewrote the
+                // word. Shuffle Time only exists in battle majors (220-299), so outside battle
+                // force the not-in-shuffle path — that also drives the normal state-exit reset
+                // (ShuffleActive + the latched struct), which the stuck word froze too.
+                if (state == StateShuffle && !FieldTracker.InBattle)
+                {
+                    if (!_stuck17Logged)
+                    {
+                        _stuck17Logged = true;   // tripwire: proves the stuck condition occurred
+                        Log($"[Shuffle] state 17 OUTSIDE battle (major={FieldTracker.CurrentMajor}) — gate suppressed (heaviness-bug trigger)");
+                    }
+                    state = -1;
+                }
+                else if (FieldTracker.InBattle) _stuck17Logged = false;
                 ShuffleStateActive = state == StateShuffle;
                 if (state != StateShuffle)
                 {

@@ -42,7 +42,10 @@ internal sealed unsafe class SocialLinkRankUp
         [9] = "Justice", [10] = "Hermit", [11] = "Fortune", [12] = "Strength",
         [13] = "Hanged Man", [14] = "Death", [15] = "Temperance", [16] = "Devil",
         [17] = "Tower", [18] = "Star", [19] = "Moon", [20] = "Sun",
-        [21] = "Judgement", [25] = "Jester", [27] = "Aeon",
+        [21] = "Judgement", [25] = "Jester", [26] = "Hunger", [27] = "Aeon",
+        // 26 = Hunger (Jester's evolution — Battle.cs SLink-screen numbering, same table).
+        // The game flips Adachi's commu row 25→26 at the story beat; because the spoken
+        // arcana ALWAYS comes from the live row byte, "Hunger" can never leak early.
     };
 
     // script-task suffix → (display name, arcana). Fixed game data (the
