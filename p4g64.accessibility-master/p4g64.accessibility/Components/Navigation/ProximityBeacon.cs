@@ -29,6 +29,15 @@ internal abstract class ProximityBeacon
     private readonly BeaconVoice _voice;
     private readonly bool _loaded;
 
+    /// <summary>mod_settings.json key persisting the on/off state across sessions (2026-08-27).</summary>
+    private string SettingsKey => GetType().Name switch { "ExitBeacon" => "exit_beacon_on", "ChestBeacon" => "chest_beacon_on", _ => GetType().Name + "_on" };
+    /// <summary>Live on/off for the F1 menu (persists; silent - the menu announces the row itself).</summary>
+    internal bool Active
+    {
+        get => _active;
+        set { if (!_loaded) return; _active = value; if (!value) { _voice.Playing = false; DungeonAudio.SetWant(this, false); } ModSettings.SetBool(SettingsKey, value); }
+    }
+
     protected abstract int Vk { get; }
     protected abstract string SoundFile { get; }
     protected abstract string Label { get; }
@@ -48,9 +57,10 @@ internal abstract class ProximityBeacon
         _voice = new BeaconVoice(DungeonAudio.Format, mono, gapFrames);
         DungeonAudio.AddInput(_voice);
 
+        _active = _loaded && ModSettings.GetBool(SettingsKey, false);   // restore last session's state
         _thread = new Thread(PollLoop) { IsBackground = true, Name = GetType().Name };
         _thread.Start();
-        Log($"[{GetType().Name}] ready ({(char)Vk} to toggle){(_loaded ? "" : " — sound missing, disabled")}");
+        Log($"[{GetType().Name}] ready ({(char)Vk} to toggle){(_loaded ? "" : " — sound missing, disabled")}{(_active ? " — restored ON" : "")}");
     }
 
     public void Stop() { _stopped = true; _active = false; DungeonAudio.SetWant(this, false); }
@@ -148,6 +158,7 @@ internal abstract class ProximityBeacon
             _active = false;
             _voice.Playing = false;
             DungeonAudio.SetWant(this, false);
+            ModSettings.SetBool(SettingsKey, false);
             Speech.Say($"{Label} off.", true);
             Log($"[{GetType().Name}] OFF");
             return;
@@ -155,6 +166,7 @@ internal abstract class ProximityBeacon
         if (FieldTracker.CurrentMajor < 20) { Speech.Say($"{Label} only works in dungeons.", true); return; }
         _active = true;
         _grace = 0;
+        ModSettings.SetBool(SettingsKey, true);
         Speech.Say($"{Label} on.", true);
         Log($"[{GetType().Name}] ON");
     }

@@ -95,10 +95,15 @@ public class Mod : ModBase // <= Do not Remove.
     private Components.ConfigValueText _configValueText; // config-menu live values (450C60 render stream) — rooted (hook delegate)
     private DaidaraCharSelect _daidaraCharSelect;
     private OverworldNav _overworldNav;
+    private Components.Navigation.OverworldZones _overworldZones;   // world helper: map descriptions + walk zones (2026-09-02)
+    private Components.CheckLabel _checkLabel;                      // "Check: Sofa" prompt-label reader — rooted (hook delegate)
     private DungeonCursor? _dungeonCursor;
     private EnemyRadar? _enemyRadar;
+    private Components.Navigation.CameraNorth? _cameraNorth;
     private ExitBeacon? _exitBeacon;
     private ChestBeacon? _chestBeacon;
+    /// <summary>SettingsMenu access to the beacon toggles (2026-08-27).</summary>
+    internal static Components.Navigation.ProximityBeacon? ExitBeaconInst, ChestBeaconInst;
     private NavBeacon? _navBeacon;
     private WallBump? _wallBump;
     private WallHum? _wallHum;
@@ -159,7 +164,12 @@ public class Mod : ModBase // <= Do not Remove.
         Components.MovieDescription.Enabled = ModSettings.GetBool("movie_descriptions", Defaults.MovieDescriptions);
         SoundSettings.Load();
         Components.Navigation.ToneCue.Init();
-        AtlusEncoding.Initiailse(Utils.ModDir);
+        {
+            int choice = ModSettings.GetInt("text_language", Defaults.TextLanguage);
+            string table = Native.Text.GameLanguage.ResolveTable(choice);
+            Log($"[Language] text table = {table} (setting {Native.Text.GameLanguage.ChoiceLabels[Math.Clamp(choice, 0, 5)]}; Steam language \"{Native.Text.GameLanguage.DetectedSteamLanguage}\")");
+            AtlusEncoding.Initiailse(Utils.ModDir, table);
+        }
         Dialog.Initialise();
         Party.Initialise();
         PartyMember.Initialise(_hooks);
@@ -289,6 +299,14 @@ public class Mod : ModBase // <= Do not Remove.
         // reference but no longer constructed.
         _overworldNav = new OverworldNav();
 
+        // THE WORLD HELPER (2026-09-02): hand-authored map descriptions + walk
+        // zones for 2.5D maps (overworld_zones.json, hot-reloaded). Crossing a
+        // zone speaks its name; Shift+/ (LT+RT+Back) describes the place.
+        _overworldZones = new Components.Navigation.OverworldZones();
+        // CHECK-label reader (same session): "Check" → "Check: Sofa" from the
+        // game's own drawn prompt label (450C60 hook; see CheckLabel.cs).
+        _checkLabel = new Components.CheckLabel(_hooks!);
+
         // Grid cursor: H toggles a virtual cursor at the player; I/K/J/L move it
         // tile-by-tile, announcing wall / door / chest / shadow / floor and
         // stopping at walls. The unified blind-mapping tool.
@@ -300,8 +318,10 @@ public class Mod : ModBase // <= Do not Remove.
         //   / (slash)  = exit/stairs beacon toward the next-floor stairs.
         //   , (comma)  = chest beacon toward the nearest chest.
         _enemyRadar = new EnemyRadar();
+        _cameraNorth = new Components.Navigation.CameraNorth();
         _exitBeacon = new ExitBeacon();
         _chestBeacon = new ChestBeacon();
+        ExitBeaconInst = _exitBeacon; ChestBeaconInst = _chestBeacon;
         _navBeacon = new NavBeacon();   // P = 3D camera-relative beacon to the selected item / H-cursor
         _wallBump = new WallBump();     // SPIKE: thud when you hit a wall (trying-to-move-but-stuck)
         _wallHum = new WallHum();       // N: directional wall tones while walking (user-designed, 2026-07-15)

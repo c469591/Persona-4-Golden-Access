@@ -137,3 +137,15 @@ database/NAVIGATION.md
 database/SPATIAL_AWARENESS.md
 database/DUNGEON_RESEARCH.md
 database/DUNGEON_TELEPORT.md
+
+# Installer project build output
+installer/**/bin/
+installer/**/obj/
+installer/publish/
+
+# The installer is a separate local project (own git repo inside installer/), never part of the public mod repo
+installer/
+
+# local-only (user call 2026-09-04): authoring tool + language work order
+database/tools/zone_capture.py
+database/LANGUAGE_SUPPORT.md

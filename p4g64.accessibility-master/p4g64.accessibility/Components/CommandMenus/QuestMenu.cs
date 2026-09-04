@@ -94,7 +94,7 @@ internal sealed unsafe class QuestMenu : IDisposable
         nint pCamp = *(nint*)PCampPtrAddr;
         if (pCamp == 0) return;
         if (!IsReadable(pCamp + OffOpenMask, 4)) return;
-        if ((*(int*)(pCamp + OffOpenMask) & QuestMaskBit) == 0) return;
+        { int m = *(int*)(pCamp + OffOpenMask); if (m == 0 || (m & ~0x1FF) != 0 || (m & QuestMaskBit) == 0) return; }   // + camp-mask sanity (audit 2026-08-31)
 
         if (_needReset)
         {
@@ -170,7 +170,7 @@ internal sealed unsafe class QuestMenu : IDisposable
 
         nint pCamp = ReadPtr(unchecked((nint)PCampPtrAddr));
         if (pCamp == 0 || !IsReadable(pCamp + OffOpenMask, 4)) { _lastSpokenRow = int.MinValue; _needReset = true; return; }
-        if ((*(int*)(pCamp + OffOpenMask) & QuestMaskBit) == 0) { _lastSpokenRow = int.MinValue; _needReset = true; return; }
+        { int m = *(int*)(pCamp + OffOpenMask); if (m == 0 || (m & ~0x1FF) != 0 || (m & QuestMaskBit) == 0) { _lastSpokenRow = int.MinValue; _needReset = true; return; } }   // + camp-mask sanity (audit 2026-08-31)
 
         nint q = ReadPtr(pCamp + OffSubObjs + QuestK * 8);
         if (q == 0 || !IsReadable(q, 0x34)) return;
@@ -211,19 +211,7 @@ internal sealed unsafe class QuestMenu : IDisposable
     private static extern nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
     private static bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
-        byte* buf = stackalloc byte[48];
-        if (VirtualQuery(addr, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;
-        uint protect = *(uint*)(buf + 36);
-        if ((protect & 0x01) != 0 || (protect & 0x100) != 0) return false;
-        nint regionBase = *(nint*)(buf + 0);
-        nint regionSize = *(nint*)(buf + 24);
-        return a + (ulong)size <= (ulong)regionBase + (ulong)regionSize;
-    }
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     public void Dispose() { _hook?.Disable(); }
 }

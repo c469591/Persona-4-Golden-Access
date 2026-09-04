@@ -57,6 +57,14 @@ Waypoints = cell-center centerline, plus:
   Door target = stop centered in FRONT of it; everything else = the target's EXACT
   position as the final waypoint.
 
+**LOCKED DOORS (2026-09-04, Bath #3 player reports — `memory/locked_doors_bath3.md`):** a door's
+game handle is the scene node's u16 id (category 10 → 10240 + index; a door = two co-located nodes),
+the same id the dungeon script keys its lock on. `DungeonNav.LockedDoorTable` (Castle 5F ×2, Bath #3,
+from `dungeon_named_floor_map.json` named_doors kind locked_door) + a live BIT read (`IsDoorLocked`:
+locked while neither the opened bit nor the key bit is set) make `TryPlanTo` treat that crossing as
+a wall: block the far cell, re-plan (≤6 rounds), fall back to the direct route only when nothing
+else routes. The browser labels such a door "Locked door".
+
 ### 0.3 The drive — `AutoWalker.DriveRoute` (shared by every walk)
 
 Steering: live camera (`CameraForward3D`) + PWM W/A/S/D (`Steerer`), sign

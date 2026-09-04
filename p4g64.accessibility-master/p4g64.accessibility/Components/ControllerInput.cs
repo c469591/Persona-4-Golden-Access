@@ -67,6 +67,7 @@ internal class ControllerInput
     private const ushort LB = 0x0100, RB = 0x0200;   // left / right shoulder (bumpers)
     private const ushort A = 0x1000, B = 0x2000, X = 0x4000, Y = 0x8000;
     private const ushort START = 0x0010;             // LT+RT+Start = settings menu (2026-07-19)
+    private const ushort BACK = 0x0020;              // LT+RT+Back = world-helper describe (2026-09-02)
 
     // Virtual-key codes the existing handlers poll for.
     private const int VK_BACK = 0x08, VK_G = 0x47, VK_H = 0x48, VK_M = 0x4D, VK_N = 0x4E;
@@ -85,7 +86,7 @@ internal class ControllerInput
         VK_OEM_PERIOD, VK_OEM_COMMA, VK_OEM_2, VK_P,
         VK_OEM_MINUS, VK_OEM_PLUS, VK_OEM_4, VK_OEM_6,
         VK_I, VK_J, VK_K, VK_L,
-        VK_H, VK_G, VK_M, VK_N, VK_BACK, VK_O, VK_U, VK_OEM_5,
+        VK_H, VK_G, VK_M, VK_N, VK_BACK, VK_O, VK_U, VK_OEM_5, 0x42 /* B — camera north */,
         VK_UP, VK_DOWN, VK_LEFT_ARROW, VK_RIGHT_ARROW, VK_RETURN, VK_ESCAPE,
     };
 
@@ -98,6 +99,7 @@ internal class ControllerInput
     /// masking linger waits for this so a closing B press can't leak to the game.</summary>
     internal static volatile bool MenuPadHeld;
     private bool _bR3Was;                                    // LT+RT + R3 edge state (subtitle toggle)
+    private bool _bBackWas;                                  // LT+RT + Back edge state (world-helper describe)
     private bool _bL3Was;                                    // LT+RT + L3 edge state (description toggle)
     private bool _ltXWas;                                    // LT + X edge state (room Quick interact menu)
     private bool _ltR3Was;                                   // LT + R3 edge state (cursor Compass/Camera frame, Shift+N)
@@ -177,7 +179,7 @@ internal class ControllerInput
         _ltHeld = _ltHeld ? lt >= TrigOff : lt >= TrigOn;
         _modHeldShared = _rtHeld || _ltHeld;   // published for the per-frame OnInputFn (no per-frame XInput)
         bool both = _rtHeld && _ltHeld;
-        if (!both) _bUpWas = _bDownWas = _bLeftWas = _bRightWas = _bR3Was = _bL3Was = _bYWas = _bStartWas = false;  // reset edges off-combo
+        if (!both) _bUpWas = _bDownWas = _bLeftWas = _bRightWas = _bR3Was = _bL3Was = _bYWas = _bStartWas = _bBackWas = false;  // reset edges off-combo
         if (!_ltHeld) _ltXWas = _ltR3Was = false;                                             // reset LT+X / LT+R3 edges off-LT
         if (!_rtHeld) _rtL3Was = _rtLbWas = _rtRbWas = false;                                  // reset RT character-key edges off-RT
 
@@ -220,6 +222,9 @@ internal class ControllerInput
             EdgeFire(b, DPAD_DOWN,  ref _bDownWas,  static () => Dialogue.ToggleReader()); // dialogue auto-read on/off
             EdgeFire(b, R3,         ref _bR3Was,    static () => SubtitleReader.ToggleReader()); // movie subtitle on/off
             EdgeFire(b, L3,         ref _bL3Was,    static () => MovieDescription.Toggle());     // cutscene description on/off
+            // Back (Select) = world-helper describe: current zone + the map description
+            // (same as Shift+/; direct call — 2026-09-02).
+            EdgeFire(b, BACK,       ref _bBackWas,  static () => Navigation.OverworldZones.DescribeFromController());
         }
         else if (_rtHeld)
         {
@@ -259,6 +264,7 @@ internal class ControllerInput
 
             if ((b & A) != 0) desired.Add(VK_OEM_5);       // brief: name + distance (\)
             if ((b & B) != 0) desired.Add(VK_P);           // overworld nav beacon   (P)
+            if ((b & Y) != 0) desired.Add(0x42);           // camera to north        (B, 2026-08-29)
 
             if ((b & L3) != 0) desired.Add(VK_BACK); // auto-walk (Backspace)
 
@@ -535,21 +541,8 @@ internal class ControllerInput
     [DllImport("kernel32.dll")]
     private static extern unsafe nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
-    private static unsafe bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000 || a > 0x00007FFFFFFFFFFFUL) return false;
-        const int MBI_SIZE = 48, OFF_STATE = 32, OFF_PROTECT = 36;
-        const uint MEM_COMMIT = 0x1000, PAGE_NOACCESS = 0x01, PAGE_GUARD = 0x100;
-        byte* buf = stackalloc byte[MBI_SIZE];
-        if (VirtualQuery(addr, buf, MBI_SIZE) == 0) return false;
-        uint state = *(uint*)(buf + OFF_STATE), protect = *(uint*)(buf + OFF_PROTECT);
-        if (state != MEM_COMMIT) return false;
-        if ((protect & PAGE_NOACCESS) != 0) return false;
-        if ((protect & PAGE_GUARD) != 0) return false;
-        return true;
-    }
+    private static bool IsReadable(nint addr, int size)
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     // ── XInput (read-only — for the modifier + action buttons) ─────────────────
     [StructLayout(LayoutKind.Sequential)]

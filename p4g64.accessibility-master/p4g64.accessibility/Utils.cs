@@ -27,6 +27,28 @@ internal class Utils
         => addr >= 0x10000 && (ulong)addr <= 0x00007FFFFFFFFFFFUL
            && Rpm(SelfProc(), addr, dst, size, out nint got) && got == (nint)size;
 
+    /// <summary>Drop-in replacement for the per-component VirtualQuery IsReadable copies
+    /// (2026-08-31, THE BACKGROUND-POLLER HEAVINESS FIX): VirtualQuery contends the VAD
+    /// lock the game's allocator holds — ~a dozen poll threads × tens of calls/tick burned
+    /// ~4.5 cores and stuttered weak machines. This probes ONE byte in every page the range
+    /// touches via ReadProcessMemory (fails on NOACCESS/GUARD/uncommitted — the same pages
+    /// VirtualQuery rejected), no VAD walk, ~1-2µs. Callers keep their signatures.</summary>
+    internal static unsafe bool ProbeReadable(nint addr, int size)
+    {
+        if (addr == 0 || size <= 0) return false;
+        ulong a = (ulong)addr;
+        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
+        byte tmp;
+        ulong end = a + (ulong)size - 1;
+        nint self = SelfProc();
+        for (ulong page = a & ~0xFFFUL; page <= (end & ~0xFFFUL); page += 0x1000)
+        {
+            nint pr = (nint)(page < a ? a : page);
+            if (!Rpm(self, pr, &tmp, 1, out nint got) || got != 1) return false;
+        }
+        return true;
+    }
+
     /// <summary>Printable-ASCII C-string read via RPM (page-boundary aware: reads to the
     /// end of each readable page, stops cleanly at the first unreadable one). The drop-in
     /// replacement for the per-component VirtualQuery ReadCStr copies.</summary>

@@ -14,7 +14,10 @@ internal static class Defaults
     public const int ChestVol = 100;
     public const int NavVol = 100;
     public const int RadarVol = 100;
+    public const int GoldVol = 100;
     public const int ChoiceVol = 100;
+    public const int CheckVol = 100;            // the Check-prompt blip (2026-09-04)
+    public const bool CheckSoundOn = true;
     public const int CursorBeepVol = 100;
     public const int ChimeVol = 100;
     public const int BumpVol = 100;
@@ -22,6 +25,9 @@ internal static class Defaults
     public const int ShadowFreqAway = 300;
     public const int CursorMode = 1;    // 1 = Look
     public const int CursorFrame = 1;   // 1 = Camera
+    public const int TextLanguage = 0;  // 0 = Auto (Steam's per-game language)
+    public const bool RadarDefaultOn = true;   // Shadow radar starts ON in dungeons (2026-08-22)
+    public const int NavSort = 0;       // 0 = by distance, 1 = alphabetical (2026-08-31)
     public const bool DialogueReader = true;
     public const bool SubtitleReader = false;   // game's own subtitles are off by default too
     public const bool MovieDescriptions = true;
@@ -41,7 +47,10 @@ internal static class SoundSettings
     public static float ChestVol = 1f;
     public static float NavVol = 1f;
     public static float RadarVol = 1f;
+    public static float GoldVol = 1f;
     public static float ChoiceVol = 1f;
+    public static float CheckVol = 1f;
+    public static bool CheckSoundOn = true;
     public static float CursorBeepVol = 1f;
     public static float ChimeVol = 1f;
     public static float BumpVol = 1f;
@@ -58,7 +67,10 @@ internal static class SoundSettings
         ChestVol      = ModSettings.GetInt("vol_chest_beacon", Defaults.ChestVol) / 100f;
         NavVol        = ModSettings.GetInt("vol_nav_beacon", Defaults.NavVol) / 100f;
         RadarVol      = ModSettings.GetInt("vol_shadow_radar", Defaults.RadarVol) / 100f;
+        GoldVol       = ModSettings.GetInt("vol_gold_hand", Defaults.GoldVol) / 100f;
         ChoiceVol     = ModSettings.GetInt("vol_choice", Defaults.ChoiceVol) / 100f;
+        CheckVol      = ModSettings.GetInt("vol_check", Defaults.CheckVol) / 100f;
+        CheckSoundOn  = ModSettings.GetInt("check_sound_on", Defaults.CheckSoundOn ? 1 : 0) == 1;
         CursorBeepVol = ModSettings.GetInt("vol_cursor_beeps", Defaults.CursorBeepVol) / 100f;
         ChimeVol      = ModSettings.GetInt("vol_arrival_chime", Defaults.ChimeVol) / 100f;
         BumpVol       = ModSettings.GetInt("vol_wall_bump", Defaults.BumpVol) / 100f;

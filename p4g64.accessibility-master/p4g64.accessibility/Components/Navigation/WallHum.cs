@@ -29,7 +29,8 @@ internal sealed class WallHum
     private const float SideMax = 0.55f;    // gain caps for the WAV samples (tune to taste)
     private const float AheadMax = 0.45f;
     private const float BehindMax = 0.50f;
-    private const float DoorRange = 700f;   // a door is sounded within this range
+    private const float DoorRange = 1400f;  // a door is sounded within this range (700 → 1400 on player feedback 2026-08-22)
+    private const float OpenDoorRate = 1.3f; // a door you have PASSED (= open) plays higher-pitched
     private const float DoorMax = 0.55f;
     private const int VK_N = 0x4E;
     private const int VK_SHIFT = 0x10;
@@ -58,12 +59,21 @@ internal sealed class WallHum
         if (major < 20 || major >= 220) return;              // dungeon floors only
         if (CommandMenus.PlayerMenu.IsMenuOpen) return;
         i._enabled = !i._enabled;
+        ModSettings.SetBool("wall_hum_on", i._enabled);
         Speech.Say(i._enabled ? "Wall sound on." : "Wall sound off.", true);
+    }
+
+    /// <summary>Live on/off for the F1 menu (persists; silent).</summary>
+    internal static bool EnabledLive
+    {
+        get => _inst?._enabled ?? false;
+        set { var i = _inst; if (i == null) return; i._enabled = value; ModSettings.SetBool("wall_hum_on", value); }
     }
 
     public WallHum()
     {
         _inst = this;
+        _enabled = ModSettings.GetBool("wall_hum_on", false);   // restore last session's state (2026-08-27)
         var fmt = DungeonAudio.Format;
         if (BeaconVoice.TryLoadMono("wallNorth.wav", out var nMono)
             & BeaconVoice.TryLoadMono("wallSouth.wav", out var sMono)
@@ -132,6 +142,7 @@ internal sealed class WallHum
             && !CommandMenus.PlayerMenu.IsMenuOpen)
         {
             _enabled = !_enabled;
+            ModSettings.SetBool("wall_hum_on", _enabled);
             Speech.Say(_enabled ? "Wall sound on." : "Wall sound off.", true);
         }
         _nWasDown = nDown;
@@ -165,37 +176,37 @@ internal sealed class WallHum
         var (cfx, cfz) = FieldTracker.CameraForward3D();
         float px = FieldTracker.LivePlayerX, pz = FieldTracker.LivePlayerZ;
         var doors = DungeonNav.DoorSnapshot();
-        float DoorDir(float ux, float uz)
+        (float dist, bool open) DoorDir(float ux, float uz)
         {
             if (!_doorLoaded || doors.Length == 0 || float.IsNaN(px) || float.IsNaN(pz) || (cfx == 0 && cfz == 0))
-                return float.PositiveInfinity;
-            float best = float.PositiveInfinity;
+                return (float.PositiveInfinity, false);
+            float best = float.PositiveInfinity; float bx = 0, bz = 0;
             foreach (var (xx, zz) in doors)
             {
                 float vx = xx - px, vz = zz - pz;
                 float dist = MathF.Sqrt(vx * vx + vz * vz);
                 if (dist < 30f || dist > DoorRange) continue;
-                if ((vx * ux + vz * uz) / dist > 0.80f && dist < best) best = dist;   // aligned this way
+                if ((vx * ux + vz * uz) / dist > 0.80f && dist < best) { best = dist; bx = xx; bz = zz; }   // aligned this way
             }
-            return best;
+            return (best, float.IsFinite(best) && DungeonNav.IsDoorOpenMarked(bx, bz));
         }
-        float doorA = DoorDir(cfx, cfz), doorB = DoorDir(-cfx, -cfz), doorL = DoorDir(cfz, -cfx), doorR = DoorDir(-cfz, cfx);
+        var doorA = DoorDir(cfx, cfz); var doorB = DoorDir(-cfx, -cfz); var doorL = DoorDir(cfz, -cfx); var doorR = DoorDir(-cfz, cfx);
 
         _vAhead!.Playing = _vBehind!.Playing = _vLeft!.Playing = _vRight!.Playing = true;
         if (_doorLoaded) _vDAhead!.Playing = _vDBehind!.Playing = _vDLeft!.Playing = _vDRight!.Playing = true;
-        SetDir(_vAhead, _vDAhead, MathF.Max(Gain(dF), GridGain(gF)) * AheadMax * SoundSettings.WallHumVol, doorA, 0f);
-        SetDir(_vBehind, _vDBehind, MathF.Max(Gain(dB), GridGain(gB)) * BehindMax * SoundSettings.WallHumVol, doorB, 0f);
-        SetDir(_vLeft, _vDLeft, MathF.Max(Gain(dL), GridGain(gL)) * SideMax * SoundSettings.WallHumVol, doorL, -0.9f);
-        SetDir(_vRight, _vDRight, MathF.Max(Gain(dR), GridGain(gR)) * SideMax * SoundSettings.WallHumVol, doorR, +0.9f);
+        SetDir(_vAhead, _vDAhead, MathF.Max(Gain(dF), GridGain(gF)) * AheadMax * SoundSettings.WallHumVol, doorA.dist, doorA.open, 0f);
+        SetDir(_vBehind, _vDBehind, MathF.Max(Gain(dB), GridGain(gB)) * BehindMax * SoundSettings.WallHumVol, doorB.dist, doorB.open, 0f);
+        SetDir(_vLeft, _vDLeft, MathF.Max(Gain(dL), GridGain(gL)) * SideMax * SoundSettings.WallHumVol, doorL.dist, doorL.open, -0.9f);
+        SetDir(_vRight, _vDRight, MathF.Max(Gain(dR), GridGain(gR)) * SideMax * SoundSettings.WallHumVol, doorR.dist, doorR.open, +0.9f);
     }
 
     /// <summary>Drive one direction: if a door is there, play the door voice (volume
     /// by door distance) and mute the wall; otherwise play the wall at its gain.</summary>
-    private void SetDir(BeaconVoice wall, BeaconVoice? door, float wallGain, float doorDist, float pan)
+    private void SetDir(BeaconVoice wall, BeaconVoice? door, float wallGain, float doorDist, bool doorOpen, float pan)
     {
         if (_doorLoaded && door != null && float.IsFinite(doorDist))
         {
-            door.Set(DoorGain(doorDist) * DoorMax * SoundSettings.DoorVol, pan);
+            door.Set(DoorGain(doorDist) * DoorMax * SoundSettings.DoorVol, pan, doorOpen ? OpenDoorRate : 1f);
             wall.Set(0f, pan);
         }
         else

@@ -244,14 +244,8 @@ internal class Tutorial
     [DllImport("kernel32.dll")]
     private static extern unsafe nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
-    private static unsafe bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        byte* buf = stackalloc byte[48];
-        if (VirtualQuery(addr, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;
-        return (*(uint*)(buf + 36) & (0x01 | 0x100)) == 0;
-    }
+    private static bool IsReadable(nint addr, int size)
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     // ── persistence ───────────────────────────────────────────────────────
     private void Mark(string id) { if (_seen.Add(id)) Save(); }

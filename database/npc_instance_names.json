@@ -1,0 +1,131 @@
+{
+ "_comment": "Per-instance NPC renames: area = major_minor, id = the person's slot id in hex (F2 speaks it), name = what to say. Pins (optional): model = the person's model key (F2 speaks it, e.g. n1620) - the rename applies ONLY when that model occupies the slot; base = the table label the slot must currently read as (e.g. Townsperson) - a NAMED occupant (Naoto, Teddie, Old woman) keeps its own name. The same slot holds different people on different days (Dojima vs an old woman; Adachi vs Naoto vs Teddie) or story choices (Yumi vs Ayane). Several entries may share area+id with different models. Restart the game after editing.",
+ "entries": [
+  {
+   "area": "8_2",
+   "id": "0C1C",
+   "name": "Dojima",
+   "base": "Townsperson"
+  },
+  {
+   "area": "8_2",
+   "id": "0C28",
+   "name": "King Moron",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_2",
+   "id": "0C35",
+   "name": "Yumi",
+   "base": "Drama club member"
+  },
+  {
+   "area": "9_4",
+   "id": "0C34",
+   "name": "Adachi",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_2",
+   "id": "0C38",
+   "name": "Daisuke",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_2",
+   "id": "0C37",
+   "name": "Kou",
+   "base": "Townsperson"
+  },
+  {
+   "area": "8_2",
+   "id": "0C3A",
+   "name": "Adachi",
+   "base": "Townsperson"
+  },
+  {
+   "area": "8_2",
+   "id": "0C3E",
+   "name": "Yumi",
+   "base": "Drama club member"
+  },
+  {
+   "area": "6_1",
+   "id": "0C32",
+   "name": "Naoki Konishi",
+   "base": "Boy"
+  },
+  {
+   "area": "10_1",
+   "id": "0C06",
+   "name": "Konishi Liquor Store manager",
+   "base": "Townsperson"
+  },
+  {
+   "area": "8_1",
+   "id": "0C36",
+   "name": "Kou",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_6",
+   "id": "0C02",
+   "name": "Timid female student",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_2",
+   "id": "0C04",
+   "name": "Shady student",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_4",
+   "id": "0C02",
+   "name": "Male student",
+   "base": "Townsperson"
+  },
+  {
+   "area": "9_4",
+   "id": "0C00",
+   "name": "Adachi",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_2",
+   "id": "0C07",
+   "name": "Ms. Sofue",
+   "base": "Townsperson"
+  },
+  {
+   "area": "8_2",
+   "id": "0C07",
+   "name": "Avid reader",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_5",
+   "id": "0C01",
+   "name": "Homely student",
+   "base": "Townsperson"
+  },
+  {
+   "area": "6_1",
+   "id": "0C34",
+   "name": "Manager Ai Ebihara",
+   "base": "Manager"
+  },
+  {
+   "area": "6_2",
+   "id": "0C35",
+   "model": "n2151",
+   "name": "Ayane"
+  },
+  {
+   "area": "8_2",
+   "id": "0C3E",
+   "base": "Band member",
+   "name": "Ayane"
+  }
+ ]
+}

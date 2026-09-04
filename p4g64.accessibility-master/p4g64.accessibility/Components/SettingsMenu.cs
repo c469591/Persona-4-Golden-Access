@@ -103,6 +103,38 @@ internal sealed class SettingsMenu
             Desc = "A volume for every mod sound, and the shadow radar pitches.",
             Rows = new[]
             {
+                new Row
+                {
+                    Name = "Wall sound", Key = "wall_hum_on",
+                    Desc = "The continuous wall hum. Saved, so it stays as you leave it across sessions. N toggles it in a dungeon.",
+                    Kind = Kind.Toggle, Options = new[] { "Off", "On" }, Def = 0, Min = 0, Max = 1, Step = 1,
+                    Get = () => Navigation.WallHum.EnabledLive ? 1 : 0,
+                    Set = v => Navigation.WallHum.EnabledLive = v == 1,
+                },
+                new Row
+                {
+                    Name = "Shadow radar", Key = "shadow_radar_on",
+                    Desc = "Stereo tones at each shadow's real position. Saved across sessions. The period key toggles it in a dungeon.",
+                    Kind = Kind.Toggle, Options = new[] { "Off", "On" }, Def = Defaults.RadarDefaultOn ? 1 : 0, Min = 0, Max = 1, Step = 1,
+                    Get = () => Navigation.EnemyRadar.ActiveLive ? 1 : 0,
+                    Set = v => Navigation.EnemyRadar.ActiveLive = v == 1,
+                },
+                new Row
+                {
+                    Name = "Stairs beacon", Key = "exit_beacon_on",
+                    Desc = "A ping from the next-floor stairs once the minimap knows them. Saved across sessions. Slash toggles it in a dungeon.",
+                    Kind = Kind.Toggle, Options = new[] { "Off", "On" }, Def = 0, Min = 0, Max = 1, Step = 1,
+                    Get = () => Mod.ExitBeaconInst?.Active == true ? 1 : 0,
+                    Set = v => { if (Mod.ExitBeaconInst != null) Mod.ExitBeaconInst.Active = v == 1; },
+                },
+                new Row
+                {
+                    Name = "Chest beacon", Key = "chest_beacon_on",
+                    Desc = "A ping from the nearest chest. Saved across sessions. Comma toggles it in a dungeon.",
+                    Kind = Kind.Toggle, Options = new[] { "Off", "On" }, Def = 0, Min = 0, Max = 1, Step = 1,
+                    Get = () => Mod.ChestBeaconInst?.Active == true ? 1 : 0,
+                    Set = v => { if (Mod.ChestBeaconInst != null) Mod.ChestBeaconInst.Active = v == 1; },
+                },
                 Vol("Wall hum volume", "vol_wall_hum",
                     "The four directional wall sounds while walking a dungeon.", Defaults.WallHumVol,
                     () => SoundSettings.WallHumVol, v => SoundSettings.WallHumVol = v,
@@ -123,14 +155,30 @@ internal sealed class SettingsMenu
                     "The ping toward your selected target, in dungeons and town.", Defaults.NavVol,
                     () => SoundSettings.NavVol, v => SoundSettings.NavVol = v,
                     v => ToneCue.PlayTones(0.85f * v / 100f, (760f, 60), (0f, 150), (760f, 60))),
-                Vol("Shadow radar volume", "vol_shadow_radar",
-                    "The shadow tones and danger cues while the radar is on.", Defaults.RadarVol,
+                Vol("Shadow sound volume", "vol_shadow_radar",
+                    "The shadow sound and danger cues while the radar is on.", Defaults.RadarVol,
                     () => SoundSettings.RadarVol, v => SoundSettings.RadarVol = v,
-                    v => ToneCue.PlayTones(0.10f * v / 100f, (SoundSettings.ShadowFreqAway, 700))),
+                    v => ToneCue.PlayTones(0.10f * v / 100f, (300f, 700))),
+                Vol("Golden hand volume", "vol_gold_hand",
+                    "The golden hand sound while the radar is on.", Defaults.GoldVol,
+                    () => SoundSettings.GoldVol, v => SoundSettings.GoldVol = v,
+                    v => ToneCue.PlayTones(0.10f * v / 100f, (500f, 700))),
                 Vol("Choice sound volume", "vol_choice",
                     "The chime when a dialogue choice appears.", Defaults.ChoiceVol,
                     () => SoundSettings.ChoiceVol, v => SoundSettings.ChoiceVol = v,
                     v => ToneCue.PlayWav(_wavChoice, 0.9f * v / 100f)),
+                new Row
+                {
+                    Name = "Check sound", Key = "check_sound_on",
+                    Desc = "A short blip whenever a Check prompt appears, before its name is spoken.",
+                    Kind = Kind.Toggle, Options = new[] { "Off", "On" }, Def = Defaults.CheckSoundOn ? 1 : 0, Min = 0, Max = 1, Step = 1,
+                    Get = () => SoundSettings.CheckSoundOn ? 1 : 0,
+                    Set = v => { SoundSettings.CheckSoundOn = v == 1; ModSettings.SetInt("check_sound_on", v); },
+                },
+                Vol("Check sound volume", "vol_check",
+                    "The blip when a Check prompt appears.", Defaults.CheckVol,
+                    () => SoundSettings.CheckVol, v => SoundSettings.CheckVol = v,
+                    v => FieldTracker.PlayCheckCue(v / 100f)),
                 Vol("Cursor beeps volume", "vol_cursor_beeps",
                     "The short ticks from the mapping cursor and the navigation browsers.", Defaults.CursorBeepVol,
                     () => SoundSettings.CursorBeepVol, v => SoundSettings.CursorBeepVol = v,
@@ -143,25 +191,6 @@ internal sealed class SettingsMenu
                     "The thunk when you push into a wall.", Defaults.BumpVol,
                     () => SoundSettings.BumpVol, v => SoundSettings.BumpVol = v,
                     v => ToneCue.PlayTones(0.5f * v / 100f, (440f, 55), (300f, 85))),
-                new Row
-                {
-                    Name = "Shadow pitch, facing you", Key = "shadow_freq_facing_you",
-                    Desc = "Pitch of the growl when a shadow is looking at you. "
-                         + "Keep it clearly apart from the facing-away tone — that contrast is what makes a shadow's attention audible.",
-                    Kind = Kind.Hertz, Def = Defaults.ShadowFreqYou, Min = 60, Max = 600, Step = 10,
-                    Get = () => (int)MathF.Round(SoundSettings.ShadowFreqYou),
-                    Set = v => { SoundSettings.ShadowFreqYou = v; ModSettings.SetInt("shadow_freq_facing_you", v); },
-                    Preview = v => ToneCue.PlayTones(0.10f * SoundSettings.RadarVol, (v, 700)),
-                },
-                new Row
-                {
-                    Name = "Shadow pitch, facing away", Key = "shadow_freq_facing_away",
-                    Desc = "Pitch of the soft steady tone when a shadow has not seen you.",
-                    Kind = Kind.Hertz, Def = Defaults.ShadowFreqAway, Min = 60, Max = 600, Step = 10,
-                    Get = () => (int)MathF.Round(SoundSettings.ShadowFreqAway),
-                    Set = v => { SoundSettings.ShadowFreqAway = v; ModSettings.SetInt("shadow_freq_facing_away", v); },
-                    Preview = v => ToneCue.PlayTones(0.10f * SoundSettings.RadarVol, (v, 700)),
-                },
             },
         },
         new Category
@@ -170,6 +199,14 @@ internal sealed class SettingsMenu
             Desc = "How the H mapping cursor starts.",
             Rows = new[]
             {
+                new Row
+                {
+                    Name = "Navigation sorting", Key = "nav_sort",
+                    Desc = "How the navigation lists are ordered. By distance keeps the nearest first; Alphabetical keeps a stable order. It applies in town and in dungeon lobbies; dungeon floors always stay by distance.",
+                    Kind = Kind.Choice, Options = new[] { "By distance", "Alphabetical" }, Def = Defaults.NavSort, Min = 0, Max = 1, Step = 1,
+                    Get = () => ModSettings.GetInt("nav_sort", Defaults.NavSort),
+                    Set = v => ModSettings.SetInt("nav_sort", v),
+                },
                 new Row
                 {
                     Name = "Cursor default mode", Key = "cursor_default_mode",
@@ -194,6 +231,14 @@ internal sealed class SettingsMenu
             Desc = "The spoken reader toggles. Their shortcuts keep working and stay in sync.",
             Rows = new[]
             {
+                new Row
+                {
+                    Name = "Game text language", Key = "text_language",
+                    Desc = "Which script the game's text is decoded with. Auto follows the language set for the game in Steam. Takes effect after restarting the game.",
+                    Kind = Kind.Choice, Options = Native.Text.GameLanguage.ChoiceLabels, Def = Defaults.TextLanguage, Min = 0, Max = 5, Step = 1,
+                    Get = () => ModSettings.GetInt("text_language", Defaults.TextLanguage),
+                    Set = v => { ModSettings.SetInt("text_language", v); Speech.Say("Takes effect after restarting the game.", false); },
+                },
                 new Row
                 {
                     Name = "Dialogue reader", Key = "dialogue_reader",

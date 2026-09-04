@@ -68,6 +68,48 @@ internal static class StairsPlan
         var path = new List<(int r, int c)>();
         if (!GridWalk.TryCellPath(r0, c0, r1, c1, path, blocked)) return Result.NoRoute;
 
+        // LOCKED DOORS (2026-09-04, Bath #3: six players parked at the locked west door of the
+        // stairs room): a crossing whose door is locked (DungeonNav.IsDoorLocked — the game's
+        // own lock bits) is a WALL for this plan. Block the far cell and re-plan, up to a few
+        // rounds; if nothing else routes, keep the original path (the drive's door ladder then
+        // reports what it can).
+        {
+            var lockedDoors = new List<(float x, float z)>();
+            try { foreach (var d in DungeonNav.Doors()) if (DungeonNav.IsDoorLocked(d.x, d.z)) lockedDoors.Add(d); } catch { }
+            if (lockedDoors.Count > 0)
+            {
+                var added = new List<int>();
+                for (int round = 0; round < 6; round++)
+                {
+                    int bad = -1;
+                    for (int i = 0; i + 1 < path.Count && bad < 0; i++)
+                    {
+                        var (ar, ac) = path[i]; var (br, bc) = path[i + 1];
+                        if (GridWalk.RoomIdOf(ar, ac) == GridWalk.RoomIdOf(br, bc)) continue;
+                        if (!MinimapTracker.CellToWorld(ar, ac, out float cax, out float caz)) continue;
+                        if (!MinimapTracker.CellToWorld(br, bc, out float cbx, out float cbz)) continue;
+                        float mx = (cax + cbx) * 0.5f, mz = (caz + cbz) * 0.5f;
+                        foreach (var (lx, lz) in lockedDoors)
+                            if ((lx - mx) * (lx - mx) + (lz - mz) * (lz - mz) < DoorSnapUnits * DoorSnapUnits) { bad = i; break; }
+                    }
+                    if (bad < 0) break;
+                    var (fr, fc) = path[bad + 1];
+                    int key = fr * MinimapTracker.COLS + fc;
+                    Utils.Log($"[StairsPlan] locked door on the route between cell ({path[bad].r},{path[bad].c}) and ({fr},{fc}) — routing around");
+                    if (!blocked.Add(key)) break;
+                    added.Add(key);
+                    var alt = new List<(int r, int c)>();
+                    if (GridWalk.TryCellPath(r0, c0, r1, c1, alt, blocked)) { path = alt; continue; }
+                    // No way around: give the blocks back and keep the original route.
+                    foreach (var k in added) blocked.Remove(k);
+                    Utils.Log("[StairsPlan] no route around the locked door — keeping the direct route");
+                    path.Clear();
+                    GridWalk.TryCellPath(r0, c0, r1, c1, path, blocked);
+                    break;
+                }
+            }
+        }
+
         // Cross-room stairs: stop at the FIRST path cell inside the target's room.
         // Everything else: go all the way to the target cell.
         int cut = path.Count - 1;

@@ -49,7 +49,12 @@ internal sealed unsafe class UiTextSpy
             try
             {
                 bool k = (GetAsyncKeyState(VK_F9) & 0x8000) != 0;
-                if (k && !_keyWas && GameHasFocus() && FieldTracker.InBattle)
+                // 2026-09-02: also armable on 2.5D FIELD maps (major 1..19) for the
+                // CHECK-label hunt ("Futon"/"Sofa" prompt bar — does it flow through
+                // 450C60?). Ctrl+F9 room-scout is unbound, so no collision.
+                bool armable = FieldTracker.InBattle
+                               || (FieldTracker.CurrentMajor > 0 && FieldTracker.CurrentMajor < 20);
+                if (k && !_keyWas && GameHasFocus() && armable)
                 {
                     // Shift+F9 = RAW mode (8s, NO dedupe): logs every draw so the
                     // REDRAW PATTERN shows — if a cursor move redraws only the
@@ -154,16 +159,7 @@ internal sealed unsafe class UiTextSpy
     private static string ReadCStr(nint p, int maxLen) => ReadCStringRpm(p, maxLen);  // RPM since 2026-07-27 (menu-heaviness fix: VirtualQuery stalls under allocator contention)
 
     private static bool IsReadableStatic(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
-        byte* buf = stackalloc byte[48];
-        if (VirtualQuery(addr, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;
-        uint protect = *(uint*)(buf + 36);
-        return (protect & 0x101) == 0;
-    }
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     [DllImport("user32.dll")] private static extern short GetAsyncKeyState(int vKey);
     [DllImport("kernel32.dll")]

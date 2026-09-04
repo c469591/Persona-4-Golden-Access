@@ -223,26 +223,5 @@ internal sealed unsafe class BattleLog
     private static extern nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
     private static bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
-        const int MBI_SIZE = 48;
-        const int OFF_STATE = 32;
-        const int OFF_PROTECT = 36;
-        const uint MEM_COMMIT = 0x1000;
-        const uint PAGE_NOACCESS = 0x01;
-        const uint PAGE_GUARD = 0x100;
-        byte* buf = stackalloc byte[MBI_SIZE];
-        if (VirtualQuery(addr, buf, MBI_SIZE) == 0) return false;
-        uint state = *(uint*)(buf + OFF_STATE);
-        uint protect = *(uint*)(buf + OFF_PROTECT);
-        if (state != MEM_COMMIT) return false;
-        if ((protect & PAGE_NOACCESS) != 0) return false;
-        if ((protect & PAGE_GUARD) != 0) return false;
-        nint regionBase = *(nint*)(buf + 0);
-        nint regionSize = *(nint*)(buf + 24);
-        ulong end = (ulong)regionBase + (ulong)regionSize;
-        return a + (ulong)size <= end;
-    }
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 }

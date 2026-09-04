@@ -1,0 +1,1000 @@
+{
+ "_comment": "THE WORLD HELPER (v2.1.0, 2026-09-02): hand-authored map descriptions + walk ZONES for 2.5D overworld/interior maps. Key = 'major_minor'. Zones are world-space rectangles (x/z = [min,max], FieldTracker.WorldPlayerPos space), matched top to bottom, FIRST hit wins; 'default' is spoken anywhere no zone matches. Crossing a boundary speaks the zone name; Shift+/ (pad LT+RT+Back) speaks the current zone's detail + the map description. Authored with tools/zone_capture.py (user walks, we capture position + screenshot). Edit freely - the mod reloads this file when it changes, no rebuild, no restart.",
+ "areas": {
+  "7_3": {
+   "name": "Your room",
+   "description": "Your bedroom, upstairs in the Dojima house. A small tatami room with a checkered carpet in the middle, where the low work table sits. The door to the living room is in one corner with the calendar on the wall beside it, and the sofa sits under the curtained window next to them. The metal shelf and the TV stand along the far wall. Your futon and the study desk share the opposite corner. The only exit is the door, leading downstairs to the living room.",
+   "default": "Your room",
+   "zones": [
+    {
+     "name": "Door",
+     "detail": "The door out of your room, leading downstairs to the living room.",
+     "x": [
+      190,
+      300
+     ],
+     "z": [
+      -210,
+      -95
+     ]
+    },
+    {
+     "name": "Calendar",
+     "detail": "The wall calendar, hanging between the door and the metal shelf.",
+     "x": [
+      170,
+      300
+     ],
+     "z": [
+      -95,
+      -15
+     ]
+    },
+    {
+     "name": "Sofa",
+     "detail": "A dark blue couch with two star-patterned cushions, under the curtained window.",
+     "x": [
+      90,
+      300
+     ],
+     "z": [
+      -260,
+      -110
+     ]
+    },
+    {
+     "name": "Metal shelf",
+     "detail": "Open metal shelves. Your games and stereo sit on the bottom shelf.",
+     "x": [
+      150,
+      300
+     ],
+     "z": [
+      -15,
+      200
+     ]
+    },
+    {
+     "name": "TV",
+     "detail": "A small TV with a game console, on the stand along the wall.",
+     "x": [
+      0,
+      150
+     ],
+     "z": [
+      90,
+      200
+     ]
+    },
+    {
+     "name": "Study desk",
+     "detail": "The green-topped study desk with a white chair, your notebook and books. You study here at night.",
+     "x": [
+      -260,
+      -90
+     ],
+     "z": [
+      -140,
+      0
+     ]
+    },
+    {
+     "name": "Futon",
+     "detail": "Your futon, laid out in the corner of the room.",
+     "x": [
+      -260,
+      -40
+     ],
+     "z": [
+      0,
+      200
+     ]
+    },
+    {
+     "name": "Work table",
+     "detail": "The low wooden table in the middle of the room, where you work in the evening.",
+     "x": [
+      -40,
+      170
+     ],
+     "z": [
+      -95,
+      90
+     ]
+    }
+   ]
+  },
+  "7_2": {
+   "name": "Living room",
+   "description": "The Dojima house living room and kitchen, downstairs. A Japanese-style room in two halves: a tatami side with the television and the kotatsu table in front of it, and a wooden-floored side with the dining table and the kitchen counter, with the refrigerator along the wall. The save point is at the chest of drawers in the middle of the room. A small garden is out on the veranda. The stairs lead up to your room, and the entrance is the way out of the house.",
+   "default": "Living room",
+   "zones": [
+    {
+     "name": "Kitchen",
+     "detail": "The kitchen counter, with the sink and the stove.",
+     "x": [
+      380,
+      600
+     ],
+     "z": [
+      160,
+      360
+     ]
+    },
+    {
+     "name": "Fridge",
+     "detail": "The refrigerator.",
+     "x": [
+      380,
+      600
+     ],
+     "z": [
+      10,
+      160
+     ]
+    },
+    {
+     "name": "Entrance",
+     "detail": "The entrance, the way out of the house.",
+     "x": [
+      380,
+      600
+     ],
+     "z": [
+      -240,
+      10
+     ]
+    },
+    {
+     "name": "Stairs",
+     "detail": "The stairs up to your room.",
+     "x": [
+      210,
+      480
+     ],
+     "z": [
+      -480,
+      -240
+     ]
+    },
+    {
+     "name": "Save point",
+     "detail": "The save point, at the chest of drawers.",
+     "x": [
+      -20,
+      200
+     ],
+     "z": [
+      -270,
+      -60
+     ]
+    },
+    {
+     "name": "TV",
+     "detail": "The television.",
+     "x": [
+      -430,
+      -190
+     ],
+     "z": [
+      -260,
+      -20
+     ]
+    },
+    {
+     "name": "Kotatsu",
+     "detail": "The kotatsu, a low table with cushions, in front of the television.",
+     "x": [
+      -190,
+      0
+     ],
+     "z": [
+      -150,
+      120
+     ]
+    },
+    {
+     "name": "Garden",
+     "detail": "The garden on the veranda.",
+     "x": [
+      -120,
+      210
+     ],
+     "z": [
+      140,
+      360
+     ]
+    }
+   ]
+  },
+  "7_1": {
+   "name": "Dojima house, outside",
+   "description": "The street outside the Dojima house, in a quiet residential neighborhood of Inaba, with the green hills rising in the distance. The house is partway along the street: its front gate, the scooter parked beside it, and further down the road a garden plot. The street has an exit at each end, and both lead out to the town map where you choose where to go.",
+   "default": "Neighborhood street",
+   "zones": [
+    {
+     "name": "Exit",
+     "detail": "An exit from the street. Leads out to the town map, where you choose where to go.",
+     "x": [
+      1050,
+      1900
+     ],
+     "z": [
+      180,
+      900
+     ]
+    },
+    {
+     "name": "Scooter",
+     "detail": "The scooter parked by the house.",
+     "x": [
+      270,
+      480
+     ],
+     "z": [
+      -60,
+      200
+     ]
+    },
+    {
+     "name": "House entrance",
+     "detail": "The front of the Dojima house, the way inside.",
+     "x": [
+      -350,
+      270
+     ],
+     "z": [
+      -60,
+      200
+     ]
+    },
+    {
+     "name": "Garden",
+     "detail": "A garden plot beside the road.",
+     "x": [
+      -1050,
+      -680
+     ],
+     "z": [
+      -60,
+      220
+     ]
+    },
+    {
+     "name": "Exit",
+     "detail": "An exit from the street. Leads out to the town map, where you choose where to go.",
+     "x": [
+      -2400,
+      -1550
+     ],
+     "z": [
+      180,
+      900
+     ]
+    }
+   ]
+  },
+  "9_4": {
+   "name": "Junes, West Entrance",
+   "description": "The ground-floor entrance of the Junes department store. Two elevators are set in the back wall, up to the upper floors. The glass doors lead outside. Shopping baskets and carts are stacked along the wall.",
+   "default": "Junes entrance",
+   "zones": [
+    {
+     "name": "Elevator",
+     "detail": "The elevators, up to the upper floors of Junes.",
+     "x": [
+      -650,
+      -120
+     ],
+     "z": [
+      0,
+      400
+     ]
+    },
+    {
+     "name": "Exit",
+     "detail": "The glass doors, the way out of Junes.",
+     "x": [
+      60,
+      520
+     ],
+     "z": [
+      140,
+      460
+     ]
+    }
+   ]
+  },
+  "8_2": {
+   "name": "Shopping District, South",
+   "description": "The southern shopping district of Inaba, a long straight street of small shops and old buildings. The corner with the bus stop and the exit to the town map is at one end, and the way up to the north shopping district is at the far end. The shops line one side of the street: the bookstore, Daidara Metalworks, Marukyu Tofu, and the Shiroku Store. The save point is across the road.",
+   "description_extra": [
+    {
+     "from": "4-16",
+     "text": "The Velvet Room, a blue door, is along the shop row between the bookstore and Daidara."
+    }
+   ],
+   "default": "Shopping district",
+   "zones": [
+    {
+     "name": "Exit",
+     "detail": "An exit from the district. Leads out to the town map, where you choose where to go.",
+     "x": [
+      830,
+      1080
+     ],
+     "z": [
+      20,
+      340
+     ]
+    },
+    {
+     "name": "Bus stop",
+     "detail": "The bus stop at the street corner.",
+     "x": [
+      620,
+      850
+     ],
+     "z": [
+      140,
+      360
+     ]
+    },
+    {
+     "name": "Save point",
+     "detail": "The save point, across the road from the shops.",
+     "x": [
+      240,
+      500
+     ],
+     "z": [
+      -2300,
+      -1900
+     ]
+    },
+    {
+     "name": "Yomenaido Bookstore",
+     "detail": "The Yomenaido bookstore.",
+     "x": [
+      -620,
+      -350
+     ],
+     "z": [
+      -1970,
+      -1690
+     ]
+    },
+    {
+     "name": "Store poster",
+     "detail": "The store poster outside the bookstore.",
+     "x": [
+      -620,
+      -350
+     ],
+     "z": [
+      -2230,
+      -2010
+     ]
+    },
+    {
+     "name": "Velvet Room",
+     "detail": "The Velvet Room, the blue door.",
+     "x": [
+      -620,
+      -330
+     ],
+     "z": [
+      -2610,
+      -2380
+     ],
+     "from": "4-16"
+    },
+    {
+     "name": "Daidara Metalworks",
+     "detail": "Daidara Metalworks, the weapon and armor shop.",
+     "x": [
+      -720,
+      -420
+     ],
+     "z": [
+      -3175,
+      -2820
+     ]
+    },
+    {
+     "name": "Mailbox",
+     "detail": "A mailbox on the shop side of the street.",
+     "x": [
+      -650,
+      -400
+     ],
+     "z": [
+      -3420,
+      -3230
+     ]
+    },
+    {
+     "name": "Marukyu Tofu",
+     "detail": "Marukyu Tofu, the tofu shop.",
+     "x": [
+      -620,
+      -360
+     ],
+     "z": [
+      -4150,
+      -3430
+     ]
+    },
+    {
+     "name": "Capsule Machine",
+     "detail": "A capsule toy machine outside the Shiroku Store.",
+     "x": [
+      -700,
+      -440
+     ],
+     "z": [
+      -5080,
+      -4900
+     ]
+    },
+    {
+     "name": "Shiroku Store",
+     "detail": "The Shiroku Store, a general goods shop.",
+     "x": [
+      -700,
+      -440
+     ],
+     "z": [
+      -5320,
+      -5080
+     ]
+    },
+    {
+     "name": "Vending machine",
+     "detail": "A drink vending machine outside the Shiroku Store.",
+     "x": [
+      -680,
+      -430
+     ],
+     "z": [
+      -5540,
+      -5350
+     ]
+    },
+    {
+     "name": "To north shopping district",
+     "detail": "The way to the north shopping district.",
+     "x": [
+      -640,
+      -240
+     ],
+     "z": [
+      -6420,
+      -5940
+     ]
+    }
+   ]
+  },
+  "8_1": {
+   "name": "Shopping District, North",
+   "description": "The northern shopping district of Inaba, an old street lined with small family-run shops. From the exit back to the south district, the street runs past the Chinese diner and the croquette stall up to Tatsuhime Shrine, where it bends and continues past the textile shop, the barber and other stores to Konishi Liquors at the far end. An exit out to the town map is beyond the liquor store.",
+   "default": "Shopping district",
+   "zones": [
+    {
+     "name": "To south shopping district",
+     "detail": "The way back to the south shopping district.",
+     "x": [
+      -460,
+      540
+     ],
+     "z": [
+      1130,
+      1470
+     ]
+    },
+    {
+     "name": "Chinese Diner Aiya",
+     "detail": "Chinese Diner Aiya, a small family-run Chinese restaurant.",
+     "x": [
+      -620,
+      -350
+     ],
+     "z": [
+      280,
+      780
+     ]
+    },
+    {
+     "name": "Town Bulletin Board",
+     "detail": "The town bulletin board, where local notices and requests are posted.",
+     "x": [
+      -620,
+      -350
+     ],
+     "z": [
+      -290,
+      150
+     ]
+    },
+    {
+     "name": "Souzai Daigaku",
+     "detail": "Souzai Daigaku, a deli stall famous for its croquettes.",
+     "x": [
+      -720,
+      -430
+     ],
+     "z": [
+      -1000,
+      -450
+     ]
+    },
+    {
+     "name": "Marutake Hobby Shop",
+     "detail": "Marutake Hobby Shop, a model-kit and hobby store.",
+     "x": [
+      -670,
+      -370
+     ],
+     "z": [
+      -1820,
+      -1180
+     ]
+    },
+    {
+     "name": "Pharmacy",
+     "detail": "The pharmacy, across the street from the shops.",
+     "x": [
+      320,
+      620
+     ],
+     "z": [
+      -1500,
+      -560
+     ]
+    },
+    {
+     "name": "Closed Store",
+     "detail": "A shuttered, closed-down store, across the road from the Chinese diner.",
+     "x": [
+      260,
+      640
+     ],
+     "z": [
+      300,
+      680
+     ]
+    },
+    {
+     "name": "Tatsuhime Shrine",
+     "detail": "Tatsuhime Shrine, a small local shrine up a set of steps, with a red torii gate and a fox.",
+     "x": [
+      -1120,
+      -540
+     ],
+     "z": [
+      -3870,
+      -3400
+     ]
+    },
+    {
+     "name": "Tatsumi Textiles",
+     "detail": "Tatsumi Textiles, a family-run fabric and kimono shop.",
+     "x": [
+      -1860,
+      -1440
+     ],
+     "z": [
+      -4540,
+      -4160
+     ]
+    },
+    {
+     "name": "Mailbox",
+     "detail": "A mailbox on the street.",
+     "x": [
+      -2280,
+      -2040
+     ],
+     "z": [
+      -4870,
+      -4620
+     ]
+    },
+    {
+     "name": "Barber",
+     "detail": "The barber shop.",
+     "x": [
+      -2580,
+      -2230
+     ],
+     "z": [
+      -5090,
+      -4780
+     ]
+    },
+    {
+     "name": "Electronics Store",
+     "detail": "The Ichikawa electronics store.",
+     "x": [
+      -3840,
+      -3220
+     ],
+     "z": [
+      -5230,
+      -4410
+     ]
+    },
+    {
+     "name": "Closed Store",
+     "detail": "A shuttered, closed-down store.",
+     "x": [
+      -4060,
+      -3710
+     ],
+     "z": [
+      -5880,
+      -5170
+     ]
+    },
+    {
+     "name": "Konishi Liquors",
+     "detail": "Konishi Liquors, a family-run liquor store.",
+     "x": [
+      -4300,
+      -4020
+     ],
+     "z": [
+      -6230,
+      -5900
+     ]
+    },
+    {
+     "name": "Vending machine",
+     "detail": "Drink vending machines outside Konishi Liquors.",
+     "x": [
+      -4320,
+      -4060
+     ],
+     "z": [
+      -6570,
+      -6190
+     ]
+    },
+    {
+     "name": "Bicycle Shop",
+     "detail": "A bicycle shop.",
+     "x": [
+      -4210,
+      -3910
+     ],
+     "z": [
+      -7300,
+      -7010
+     ]
+    },
+    {
+     "name": "Exit",
+     "detail": "An exit from the district. Leads out to the town map, where you choose where to go.",
+     "x": [
+      -3960,
+      -3180
+     ],
+     "z": [
+      -7880,
+      -7520
+     ]
+    },
+    {
+     "name": "Northwest turn",
+     "detail": "The street bends here and turns northwest, running past the shrine toward the far shops.",
+     "x": [
+      -4400,
+      760
+     ],
+     "z": [
+      -6121,
+      -2903
+     ]
+    },
+    {
+     "name": "Northeast turn",
+     "detail": "The road turns northeast here, running down the last stretch to the exit.",
+     "x": [
+      -4400,
+      760
+     ],
+     "z": [
+      -7960,
+      -6121
+     ]
+    }
+   ]
+  },
+  "8_9": {
+   "name": "Tatsuhime Shrine",
+   "description": "A small shrine on wooded ground behind the north shopping district. A paved stone path leads in from the entrance, lined with tall stone lanterns standing close together, and passes a big fox statue on a pedestal. Beyond the fox a red torii gate stands over a row of round stepping stones that lead up to the little shrine, where you can draw a fortune. To the right of the gate a larger shrine building sits on a platform with three stone steps. Dense trees surround the whole grounds.",
+   "default": "Shrine path",
+   "zones": [
+    {
+     "name": "Yashiro",
+     "detail": "The little shrine at the end of the stepping stones, under the torii gate. Check it to draw a fortune.",
+     "x": [
+      -1000,
+      -300
+     ],
+     "z": [
+      -2700,
+      -2050
+     ]
+    },
+    {
+     "name": "Exit",
+     "detail": "The way out of the shrine grounds, back to the north shopping district.",
+     "x": [
+      -500,
+      250
+     ],
+     "z": [
+      -1400,
+      -850
+     ]
+    }
+   ]
+  },
+  "10_1": {
+   "name": "Samegawa Flood Plain, road",
+   "description": "A long paved road running along the Samegawa river, above the riverbank, with an exit to the town map at each end. Behind the road stands a tall concrete embankment wall with a zigzag pattern and some graffiti, with trees along it and a blue sign naming the river. Along the road there is a big framed map signboard, and partway along a wide stone stairway leads down to the riverbank. At the far end the wall gives way to open grass with a wooden gazebo and a picnic table, and a pair of white bike-rack bars stand by the road there.",
+   "default": "Riverside road",
+   "zones": [
+    {
+     "name": "Stairs",
+     "detail": "The wide stone stairway down the slope to the riverbank.",
+     "x": [
+      -950,
+      -200
+     ],
+     "z": [
+      -1650,
+      -950
+     ]
+    },
+    {
+     "name": "Exit",
+     "detail": "An exit from the flood plain, by the river sign. Leads out to the town map, where you choose where to go.",
+     "x": [
+      -650,
+      150
+     ],
+     "z": [
+      600,
+      1200
+     ]
+    },
+    {
+     "name": "Exit",
+     "detail": "An exit from the flood plain, by the gazebo. Leads out to the town map, where you choose where to go.",
+     "x": [
+      950,
+      1750
+     ],
+     "z": [
+      -7700,
+      -7100
+     ]
+    }
+   ]
+  },
+  "10_2": {
+   "name": "Samegawa Flood Plain, riverbank",
+   "description": "The pebbly bank of the Samegawa river, below the road. The river runs along one side. A long flight of wooden steps climbs the grassy slope back up to the road, and beside the foot of the steps is a patch of grass with four tree-stump seats. At the water's edge a platform of big concrete blocks juts out into the river. The stairs are the only way out.",
+   "default": "Riverbank",
+   "zones": [
+    {
+     "name": "Stairs",
+     "detail": "The wooden steps up the slope, back to the road above.",
+     "x": [
+      150,
+      950
+     ],
+     "z": [
+      -350,
+      300
+     ]
+    }
+   ]
+  },
+  "11_1": {
+   "name": "Okina City, station front",
+   "description": "The street in front of Okina Station, a busy city street with a wide paved sidewalk marked by yellow tactile strips and brick planter boxes along the curb. The station is the centerpiece: a wide stairway with an escalator on each side, climbing under a big Okina Station sign. Next to the station's stairs on one side stands the clothing shop Croco Fur, then Cafe Chagall with its round gold sign, both in a corner with hedges and benches. On the other side of the station the sidewalk passes a square that opens off the street: the theater square, a black and white plaza with gold stars on its floor, with the 30 frame movie theater and its red-carpeted steps at the back and a crane game in a kiosk along its side. Past the square, back on the street, come the police box with a bulletin board on its wall, and then the Okina Station Bookstore with bikes parked by its door. The station is the only way out of the street: check at the foot of its stairs to leave.",
+   "default": "Station front street",
+   "zones": [
+    {
+     "name": "Okina Station Bookstore",
+     "detail": "The bookstore, Okina Books, a shop with a blue awning, glass doors and a red doormat, bikes parked beside the door.",
+     "x": [
+      3150,
+      4200
+     ],
+     "z": [
+      -1000,
+      -400
+     ]
+    },
+    {
+     "name": "Bulletin Board",
+     "detail": "The glass notice case on the police box wall.",
+     "x": [
+      2450,
+      2800
+     ],
+     "z": [
+      -550,
+      -150
+     ]
+    },
+    {
+     "name": "Okina Police Box",
+     "detail": "The police box, a small tiled building with an officer standing outside, between the bulletin board and the theater square.",
+     "x": [
+      2000,
+      2450
+     ],
+     "z": [
+      -650,
+      -250
+     ]
+    },
+    {
+     "name": "30 frame",
+     "detail": "The movie theater's entrance, at the top of red-carpeted steps, at the back of the theater square.",
+     "x": [
+      1400,
+      2050
+     ],
+     "z": [
+      -1300,
+      -900
+     ]
+    },
+    {
+     "name": "Crane Game",
+     "detail": "A crane game in a pink kiosk along the side of the theater square, next to a burger stand.",
+     "x": [
+      800,
+      1200
+     ],
+     "z": [
+      -950,
+      -650
+     ]
+    },
+    {
+     "name": "Theater square",
+     "detail": "The plaza in front of the 30 frame movie theater, set back from the street. Black and white floor with gold stars. The theater steps are at the back, the crane game along the side toward the station.",
+     "x": [
+      750,
+      2100
+     ],
+     "z": [
+      -1300,
+      -520
+     ]
+    },
+    {
+     "name": "Okina Station",
+     "detail": "The foot of the station stairway, a wide stair with an escalator on each side going up under the Okina Station sign. This is also the way out: check here to leave for the town map.",
+     "x": [
+      250,
+      950
+     ],
+     "z": [
+      -350,
+      100
+     ]
+    },
+    {
+     "name": "Croco Fur",
+     "detail": "The clothing shop, a glossy white sign over glass display doors, right beside the station stairs.",
+     "x": [
+      -800,
+      -100
+     ],
+     "z": [
+      -850,
+      -250
+     ]
+    },
+    {
+     "name": "Cafe Chagall",
+     "detail": "The cafe, a brick building with a round gold sign and arched wooden windows, next door to Croco Fur.",
+     "x": [
+      -1550,
+      -950
+     ],
+     "z": [
+      -550,
+      -150
+     ]
+    }
+   ]
+  },
+  "20_1": {
+   "name": "TV World, Entrance",
+   "description": "",
+   "default": "Entrance stage",
+   "zones": [],
+   "description_extra": [
+    {
+     "from": "4-18",
+     "text": "The entrance stage of the TV world, a square platform floating over a churning yellow fog, with nothing below it. The floor is a red and blue checkerboard, and in its middle lies a big round yellow disc painted with a ring of twisted, contorted figures. On the far side of the disc stands a stack of three old television sets on legs, the way back out to Junes. Tall studio spotlights on stands ring the stage, and behind them rise towers of metal scaffolding and ladders. On one side a short metal staircase climbs up beside the stage. Everything is tinted the sickly yellow of a TV screen."
+    }
+   ]
+  },
+  "22_1": {
+   "name": "Twisted Shopping District",
+   "description": "A warped copy of the shopping district inside the TV, a cracked street under a sky of red and black stripes, everything lit a sickly yellow. Along one side runs a long bamboo fence with twisted red foliage spilling over it, and a wooden telephone pole stands at its end. Beside the fence is the liquor store with a green awning. Its doorway is a swirling red and black vortex, the way deeper in. Vending machines and stacks of red crates sit by the store's entrance.",
+   "default": "Twisted street",
+   "zones": []
+  },
+  "22_2": {
+   "name": "Former Konishi Liquors",
+   "description": "The inside of the liquor store, lit by a cold blue light. The floor is tiled in a pattern of orange, yellow and green. Glass-fronted drink coolers line the back wall, and the store is heaped with stock: stacked kegs and crates along the sides, sake barrels and bottles, a big red banner with white lettering hanging on one side, and on the other a counter piled with bottles, boxes and a rope-bound barrel.",
+   "default": "Liquor store",
+   "zones": []
+  },
+  "23_1": {
+   "name": "Yukiko's Castle, Gate",
+   "description": "A cobblestone courtyard walled in red brick and bathed in red light. The path runs straight ahead to a tall arched gateway in the castle wall, and the doorway inside the arch is a swirling red and black vortex, the way into the castle. Rearing bronze horse statues stand on red pedestals along both sides of the path, with trimmed hedges between them, and the wall above is lined with rows of narrow arched windows.",
+   "default": "Castle courtyard",
+   "zones": []
+  },
+  "24_1": {
+   "name": "Bathhouse, Changing Area",
+   "description": "A long, narrow changing room in hot red and orange light. Tall wooden lockers line both walls in rows, leaving a corridor down the middle with a red checkered floor, and round padded stools stand here and there along it. At the far end a doorway under a decorated lintel glows bright white with steam, the way into the baths.",
+   "default": "Changing room",
+   "zones": []
+  },
+  "25_1": {
+   "name": "Marukyu Striptease Seats",
+   "description": "A cabaret hall drenched in pink and purple light. Rows of plush red velvet sofas and booths fill both sides, with a patterned carpet aisle running down the middle between them. Heavy draped curtains with lace trim hang from the walls and ceiling, and strips of neon in yellow, green and blue trace the ceiling's edge. At the end of the aisle a few steps lead up onto a small stage framed by an arch of colored bulbs, with dark curtains and a dark opening at its back, the way deeper in.",
+   "default": "Cabaret seats",
+   "zones": []
+  },
+  "26_1": {
+   "name": "Void Quest Title Screen",
+   "description": "A place built like an old 8-bit video game. A path of brown pixel bricks runs straight ahead between two strips of flat green pixel grass, and on the grass sit low brick walls, blocky blue flowers and pixel skulls. Over the end of the path float big white pixel letters reading Game Start and Continue, with a small red pixel icon beneath them, against a black sky edged by a jagged red pixel skyline. The end of the path is the way in.",
+   "default": "Title screen path",
+   "zones": []
+  },
+  "27_1": {
+   "name": "Secret Laboratory Entrance",
+   "description": "A dark clearing of cracked dirt at night, hemmed in by a barbed-wire fence strung on wooden posts, with black trees crowding around it. Overhead the sky is blood red, crossed by huge black cables and girders and the silhouette of a satellite dish, as if a factory loomed above the woods. Ahead, a tall doorway glows red in the dark, the way in. A striped traffic cone lies near the fence.",
+   "default": "Fenced clearing",
+   "zones": []
+  },
+  "28_1": {
+   "name": "Heaven, Pearly Gates",
+   "description": "A bright, airy place high among the clouds. A pale stone walkway edged in gold runs straight ahead across a meadow of pink, purple and yellow flowers, passing between two big stone planters overflowing with roses. At its end a few steps rise to a grand carved gateway in a wall of pale blue stone. The arch is wreathed in flowers and crowned by a rainbow, and beyond it is pure white light, the way in. Above the wall a huge tree trunk climbs into the sky, and islands of blue stone float among the clouds.",
+   "default": "Flower meadow",
+   "zones": []
+  },
+  "21_1": {
+   "name": "Desolate Bedroom",
+   "description": "A bare room with a wooden floor, lit a sickly yellow-green. The walls are plastered with rows of posters of a singer, every one scrawled over and defaced, and red paint is splattered across the walls and floor. On one wall is a wooden door with a slatted closet beside it. A red rope noose hangs from the ceiling in the middle of the room. In a corner stands a tall metal cabinet marked with yellow danger tape.",
+   "default": "Desolate bedroom",
+   "zones": []
+  },
+  "31_1": {
+   "name": "Grave of Hollow Memories",
+   "description": "A snow-covered clearing in a bamboo grove, under a pale pink and white sky. Crowds of dark stone statues stand everywhere, hooded figures and animal shapes, like a graveyard of them, all half buried in snow. A cracked stone path runs through the middle of the clearing to a flight of stone steps that climbs to a huge dark mound with a doorway in its front, like a buried shrine. Beside the path stands a tall rectangular doorframe glowing bright blue, the way into the dungeon.",
+   "default": "Snowy clearing",
+   "zones": []
+  },
+  "30_2": {
+   "name": "Ashihara Nakatsu",
+   "description": "A long, straight causeway paved in a red herringbone pattern, running through a tunnel of huge dark red torii gates standing one after another. It stretches over a flat, glowing sea of pale blue, and blocks and cubes float in the sky all around. At the far end the path climbs upward into the last of the gates, the way in.",
+   "default": "Torii causeway",
+   "zones": []
+  }
+ }
+}

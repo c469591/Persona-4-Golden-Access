@@ -84,9 +84,11 @@ public class AtlusEncoding : Encoding
     /// Sets up the encoding to be used in the mod
     /// </summary>
     /// <param name="modDir">The directory that the mod is in, used to read charsets</param>
-    public static void Initiailse(string modDir)
+    public static void Initiailse(string modDir, string tableFile = "P4G_EFIGS.tsv")
     {
-        P4 = new AtlusEncoding(Path.Combine(modDir, "P4.tsv"));
+        var path = Path.Combine(modDir, tableFile);
+        if (!File.Exists(path)) { Utils.Log($"[Language] table {tableFile} missing — falling back to P4G_EFIGS.tsv"); path = Path.Combine(modDir, "P4G_EFIGS.tsv"); }
+        P4 = new AtlusEncoding(path);
     }
 
     public override int GetByteCount(char[] chars, int index, int count)

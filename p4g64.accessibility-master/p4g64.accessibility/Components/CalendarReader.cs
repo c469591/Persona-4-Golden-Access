@@ -193,14 +193,7 @@ internal unsafe class CalendarReader : IDisposable
     [DllImport("kernel32.dll", EntryPoint = "VirtualQuery")]
     private static extern nint VQ(nint a, byte* b, nint l);
     private static bool IsReadable(nint a)
-    {
-        if (a < 0x10000) return false;
-        byte* buf = stackalloc byte[48];
-        if (VQ(a, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;
-        uint p = *(uint*)(buf + 36);
-        return (p & 0x01) == 0 && (p & 0x100) == 0;
-    }
+        => Utils.ProbeReadable(a, 8);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     public void Dispose() { }
 }

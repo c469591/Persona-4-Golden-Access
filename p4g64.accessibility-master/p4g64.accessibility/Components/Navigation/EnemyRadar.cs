@@ -45,6 +45,24 @@ internal class EnemyRadar
     private const float FreqFacingYou = 140f;   // low growl (sine + tremolo)
     private const float FreqFacingAway = 300f;  // soft higher steady sine
     private const float StrikeRange = 500f;      // back-attack / ambush window
+    // ── Sound map v2 (player feedback 2026-08-22): ONE sound for every Shadow (type/facing
+    // pitch split parked until the positional cue is proven), FRONT/BACK in the pitch
+    // (ahead higher, behind lower — the old pan-only cue made a Shadow straight ahead and
+    // one straight behind identical, which is how players walked into them), and a
+    // NEAR-FIELD swell + pulse so closing distance is unmistakable.
+    private const float BaseFreq = 220f;          // between the ear-proven 140/300 (vs the wall hum)
+    private const float AheadRate = 1.15f, BehindRate = 0.80f;   // pitch factor at dead ahead / dead behind
+    private const float BehindGain = 0.75f;       // behind is also a little quieter
+    private const float NearRange = 320f;         // swell + pulse start inside this
+    private const float NearBoost = 1.6f;         // up to ×2.6 volume at contact
+    private const float PulseMaxHz = 9f;          // pulse rate at contact (0 = steady beyond NearRange)
+    // ── The SHIPPED shadow sound (user sound design, adopted 2026-08-27): shadowsound-001.wav (mod folder /
+    // database/sounds in dev), looped per shadow; pitch = front/back factor,
+    // RAISED when the Shadow sees you. Delete the file to fall back to the synth.
+    private const string ShadowWav = "shadowsound-001.wav";
+    private const string GoldWav = "goldhand-001.wav";   // golden hands (spawn type 3) get their own sound (2026-08-27)
+    private const float SeesYouRate = 1.35f;      // pitch-up factor while it sees / chases you
+    private const float WavBoost = 2.5f;          // wav-mode gain boost (the synth's amplitude IS vol; a wav's content is far below full scale)
     // View-cone detection (replicates FUN_14031DCF0): cos of the angle between a
     // Shadow's forward and the direction to you. >ConeSeeCos ⇒ you're in its
     // ~63° frontal cone (it sees you); <ConeBackCos ⇒ you're clearly behind it.
@@ -69,6 +87,24 @@ internal class EnemyRadar
 
     private volatile bool _active;
     private readonly ShadowVoice[] _voices = new ShadowVoice[Voices];
+    private readonly BeaconVoice[] _wavVoices = new BeaconVoice[Voices];
+    private readonly BeaconVoice[] _goldVoices = new BeaconVoice[Voices];
+    private readonly bool _wavMode, _goldMode;
+    private float[] _goldMono = Array.Empty<float>();
+
+    /// <summary>Normalize a user-supplied buffer: target RMS 0.5 like the synth sine, peaks clamped to full scale.</summary>
+    private static void Normalize(float[] mono, string name)
+    {
+        double sum = 0; float peak = 0;
+        foreach (var v in mono) { sum += v * v; if (MathF.Abs(v) > peak) peak = MathF.Abs(v); }
+        float rms = (float)Math.Sqrt(sum / Math.Max(1, mono.Length));
+        if (rms > 1e-5f && peak > 1e-5f)
+        {
+            float scale = MathF.Min(0.5f / rms, 1.0f / peak);
+            for (int j = 0; j < mono.Length; j++) mono[j] *= scale;
+            Log($"[EnemyRadar] {name} normalized: rms {rms:F3} -> {rms * scale:F3}, peak {peak:F3} -> {peak * scale:F3} (x{scale:F2})");
+        }
+    }
     private readonly CueVoice _cue;
     private int _updateAccum;
 
@@ -78,14 +114,32 @@ internal class EnemyRadar
     public EnemyRadar()
     {
         var fmt = DungeonAudio.Format;
+        _wavMode = BeaconVoice.TryLoadMono(ShadowWav, out var shadowMono);
+        if (_wavMode) Normalize(shadowMono, ShadowWav);
+        _goldMode = _wavMode && BeaconVoice.TryLoadMono(GoldWav, out _goldMono);
+        if (_goldMode) Normalize(_goldMono, GoldWav);
         for (int i = 0; i < Voices; i++)
         {
             _voices[i] = new ShadowVoice(fmt);
             DungeonAudio.AddInput(_voices[i]);
+            if (_wavMode)
+            {
+                _wavVoices[i] = new BeaconVoice(fmt, shadowMono);
+                DungeonAudio.AddInput(_wavVoices[i]);
+                if (_goldMode)
+                {
+                    _goldVoices[i] = new BeaconVoice(fmt, _goldMono);
+                    DungeonAudio.AddInput(_goldVoices[i]);
+                }
+            }
         }
+        if (_wavMode) Log($"[EnemyRadar] WAV mode: {ShadowWav} drives the shadow voices");
         _cue = new CueVoice(fmt);
         DungeonAudio.AddInput(_cue);
 
+        _inst = this;
+        // Restore last session's state; the old "shadow_radar_default_on" (08-22) seeds it once.
+        _active = ModSettings.GetBool("shadow_radar_on", ModSettings.GetBool("shadow_radar_default_on", Defaults.RadarDefaultOn));
         _thread = new Thread(PollLoop) { IsBackground = true, Name = "EnemyRadar" };
         _thread.Start();
         Log("[EnemyRadar] ready (M to toggle Shadow audio radar)");
@@ -143,12 +197,28 @@ internal class EnemyRadar
         return major >= 20 && major < 220;   // dungeon floors 20-69; battles (220-299) excluded
     }
 
+    private static EnemyRadar? _inst;
+    /// <summary>Live on/off for the F1 menu (persists; silent).</summary>
+    internal static bool ActiveLive
+    {
+        get => _inst?._active ?? false;
+        set { var i = _inst; if (i == null) return; i._active = value; if (!value) { i.SilenceAll(); DungeonAudio.SetWant(i, false); } ModSettings.SetBool("shadow_radar_on", value); }
+    }
+
+    private void SilenceAll()
+    {
+        foreach (var v in _voices) v.TargetVolume = 0f;
+        if (_wavMode) foreach (var v in _wavVoices) v.Set(0f, 0f);
+        if (_goldMode) foreach (var v in _goldVoices) v.Set(0f, 0f);
+    }
+
     private void Toggle()
     {
         if (_active)
         {
             _active = false;
-            foreach (var v in _voices) v.TargetVolume = 0f;
+            ModSettings.SetBool("shadow_radar_on", false);
+            SilenceAll();
             DungeonAudio.SetWant(this, false);
             Speech.Say("Shadow radar off.", true);
             Log("[EnemyRadar] OFF");
@@ -162,6 +232,7 @@ internal class EnemyRadar
             return;
         }
         _active = true;
+        ModSettings.SetBool("shadow_radar_on", true);
         _tracks.Clear(); _oppArmed = false; _dangerArmed = false;
         Speech.Say("Shadow radar on.", true);
         Log("[EnemyRadar] ON");
@@ -172,8 +243,8 @@ internal class EnemyRadar
         float px = FieldTracker.LivePlayerX, pz = FieldTracker.LivePlayerZ;
 
         var shadows = float.IsNaN(px) || float.IsNaN(pz)
-            ? new List<(float x, float z, float fx, float fz)>()
-            : DungeonNav.ShadowsWithFacing();
+            ? new List<(float x, float z, float fx, float fz, int type)>()
+            : DungeonNav.ShadowsWithType();
 
         // ── continuous tones + nearest-for-strike ──
         // CAMERA-relative pan (2026-07-11, user request — one model for all dungeon
@@ -187,20 +258,30 @@ internal class EnemyRadar
         float nearest = float.MaxValue; float nearX = 0, nearZ = 0, nearCos = -1f; bool nearHasFwd = false;
         for (int i = 0; i < Voices; i++)
         {
-            if (i >= shadows.Count) { _voices[i].TargetVolume = 0f; continue; }
+            if (i >= shadows.Count) { _voices[i].TargetVolume = 0f; if (_wavMode) _wavVoices[i].Set(0f, 0f); if (_goldMode) _goldVoices[i].Set(0f, 0f); continue; }
             var s = shadows[i];
             float dx = s.x - px, dz = s.z - pz;
             float dist = MathF.Sqrt(dx * dx + dz * dz);
-            if (dist > MaxRange) { _voices[i].TargetVolume = 0f; continue; }
+            if (dist > MaxRange) { _voices[i].TargetVolume = 0f; if (_wavMode) _wavVoices[i].Set(0f, 0f); if (_goldMode) _goldVoices[i].Set(0f, 0f); continue; }
 
             float vol = MasterGain * SoundSettings.RadarVol / (1f + dist / DistanceScale);
-            float pan = 0f;
+            float pan = 0f, openness = 1f;   // openness: 1 = dead ahead, 0 = dead behind
             if (dist > 1f)
             {
-                pan = hasCam
-                    ? Math.Clamp(-((dx / dist) * camFz + (dz / dist) * (-camFx)), -1f, 1f)
-                    : Math.Clamp(dx / dist, -1f, 1f);
+                float ux = dx / dist, uz = dz / dist;
+                if (hasCam)
+                {
+                    pan = Math.Clamp(-(ux * camFz + uz * (-camFx)), -1f, 1f);
+                    openness = Math.Clamp((ux * camFx + uz * camFz + 1f) * 0.5f, 0f, 1f);
+                }
+                else pan = Math.Clamp(ux, -1f, 1f);
             }
+            // near-field: swell + pulse (pulse rate rises as the Shadow closes in)
+            float near = dist < NearRange ? 1f - dist / NearRange : 0f;
+            vol *= 1f + NearBoost * near;
+            vol *= BehindGain + (1f - BehindGain) * openness;
+            float rate = BehindRate + (AheadRate - BehindRate) * openness;
+            float pulseHz = near > 0f ? PulseMaxHz * (0.25f + 0.75f * near) : 0f;
 
             // cos angle between the Shadow's forward and the direction to you
             // (view-cone detection, FUN_14031DCF0). >ConeSeeCos = it sees you.
@@ -208,7 +289,19 @@ internal class EnemyRadar
             float cos = (hasFwd && dist > 1f) ? (s.fx * (-dx) + s.fz * (-dz)) / dist : -1f;
             bool seesYou = hasFwd && cos > ConeSeeCos;
             if (dist < nearest) { nearest = dist; nearX = s.x; nearZ = s.z; nearCos = cos; nearHasFwd = hasFwd; }
-            _voices[i].Set(vol, pan, seesYou ? SoundSettings.ShadowFreqYou : SoundSettings.ShadowFreqAway, seesYou);
+            if (_wavMode)
+            {
+                bool gold = _goldMode && s.type == 3;
+                var use = gold ? _goldVoices[i] : _wavVoices[i];
+                var other = gold ? _wavVoices[i] : (_goldMode ? _goldVoices[i] : null);
+                use.Playing = true;
+                float g = vol * WavBoost;
+                if (gold && SoundSettings.RadarVol > 0.01f) g = g / SoundSettings.RadarVol * SoundSettings.GoldVol;
+                use.Set(g, pan, rate * (seesYou ? SeesYouRate : 1f));
+                if (!gold && _goldMode) _goldVoices[i].Set(0f, 0f);
+                else if (gold) _wavVoices[i].Set(0f, 0f);
+            }
+            else _voices[i].Set(vol, pan, BaseFreq * rate, pulseHz);
         }
 
         // ── strike one-shots: view-cone + range + line-of-sight ──
@@ -239,7 +332,7 @@ internal class EnemyRadar
     /// Track each Shadow across updates (matched by nearest prior position) and
     /// fire speech when one starts chasing, stops/loses you, or lunges.
     /// </summary>
-    private void UpdateChase(List<(float x, float z, float fx, float fz)> shadows, float px, float pz)
+    private void UpdateChase(List<(float x, float z, float fx, float fz, int type)> shadows, float px, float pz)
     {
         var used = new bool[_tracks.Count];
         var next = new List<Track>(shadows.Count);
@@ -342,7 +435,7 @@ internal class EnemyRadar
         public volatile float TargetVolume;
         private volatile float _targetPan;
         private volatile float _targetFreq = 220f;
-        private volatile bool _harsh;
+        private volatile float _pulseHz;   // 0 = steady tone; >0 = amplitude pulse at this rate
 
         private float _vol, _pan, _freq = 220f;
         private double _phase, _tremPhase;
@@ -350,8 +443,8 @@ internal class EnemyRadar
 
         public ShadowVoice(WaveFormat fmt) { WaveFormat = fmt; _sr = fmt.SampleRate; }
 
-        public void Set(float vol, float pan, float freq, bool harsh)
-        { TargetVolume = vol; _targetPan = pan; _targetFreq = freq; _harsh = harsh; }
+        public void Set(float vol, float pan, float freq, float pulseHz)
+        { TargetVolume = vol; _targetPan = pan; _targetFreq = freq; _pulseHz = pulseHz; }
 
         public int Read(float[] buffer, int offset, int count)
         {
@@ -370,11 +463,12 @@ internal class EnemyRadar
                     _phase += _freq / _sr;
                     if (_phase >= 1.0) _phase -= 1.0;
                     float amp = _vol;
-                    if (_harsh)
+                    float ph = _pulseHz;
+                    if (ph > 0f)
                     {
-                        _tremPhase += 7.0 / _sr;
+                        _tremPhase += ph / _sr;
                         if (_tremPhase >= 1.0) _tremPhase -= 1.0;
-                        amp *= 0.55f + 0.45f * (0.5f + 0.5f * MathF.Sin((float)_tremPhase * MathF.Tau));
+                        amp *= 0.35f + 0.65f * (0.5f + 0.5f * MathF.Sin((float)_tremPhase * MathF.Tau));
                     }
                     s = MathF.Sin((float)_phase * MathF.Tau) * amp;
                 }

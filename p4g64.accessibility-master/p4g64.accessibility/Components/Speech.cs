@@ -27,6 +27,15 @@ internal static class Speech
     // the window is short enough to kill only true rapid-fire ping-pong, not an intentional re-read.
     // Manual repeat (RepeatLast/Step) and Record bypass this regardless.
     private const long SpamWindowMs = 300;
+
+    // GRACE RULE (2026-09-04, user: zone names cut by the next line; "took N damage" cut by
+    // "X's turn"): a line from one of these sources opens a protected window sized to its
+    // length; an INTERRUPTING line arriving inside it is downgraded to a queued one, so the
+    // protected line finishes first. Queued lines never cut anything, so nothing is lost —
+    // at worst a line arrives a second late.
+    private static readonly HashSet<string> ProtectedSources = new(StringComparer.Ordinal)
+        { "OverworldZones", "CheckLabel", "DamageMonitor", "EnemyActionHook" };
+    private static long _protectedUntilMs;
     private static readonly Dictionary<string, long> _recentSaid = new();
 
     // The game's text separates words with the Japanese IDEOGRAPHIC SPACE (U+3000),
@@ -39,8 +48,28 @@ internal static class Speech
         => s.IndexOf('　') >= 0 ? s.Replace('　', ' ') : s;
 
     /// <summary>Speak a line AND record it to history. Drop-in for the old <c>Tolk.Output</c>.</summary>
-    internal static void Say(string text, bool interrupt = true)
+    internal static void Say(string text, bool interrupt = true,
+        [System.Runtime.CompilerServices.CallerFilePath] string callerFile = "")
     {
+        // Speech-source tag (2026-08-31, the "random numbers" hunt): every spoken line is
+        // logged with the component that spoke it, so a player's log identifies the culprit
+        // of any speech spam. CallerFilePath is a COMPILE-TIME constant — zero runtime cost;
+        // the substring below runs once per spoken sentence (a few per second at most).
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            int cut = callerFile.LastIndexOfAny(new[] { '\\', '/' });
+            string src = cut >= 0 ? callerFile.Substring(cut + 1) : callerFile;
+            if (src.EndsWith(".cs")) src = src.Substring(0, src.Length - 3);
+            long now = Environment.TickCount64;
+            bool downgraded = false;
+            lock (_lock)
+            {
+                if (interrupt && now < _protectedUntilMs) { interrupt = false; downgraded = true; }
+                if (ProtectedSources.Contains(src))
+                    _protectedUntilMs = now + Math.Clamp(400 + text.Length * 55L, 1200L, 3500L);
+            }
+            Utils.Log($"[Speech] {src}: {text}{(downgraded ? "  (queued: grace)" : interrupt ? "" : "  (queued)")}");
+        }
         // TEMP perf shim (heaviness diag 2026-07-27): measures the full cost incl. Tolk IPC.
         long t0 = Components.PerfDiag.Begin();
         try { SayCore(text, interrupt); }

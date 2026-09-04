@@ -134,6 +134,14 @@ internal sealed unsafe class ResultReader
             Thread.Sleep(PollMs);
             try
             {
+                // Out of battle the manager block can be freed/reused and its state word
+                // churns — the ShuffleReader learned this the hard way (its 07-28 guard);
+                // this poll never had it (audit 2026-08-31, "random numbers" class).
+                if (!FieldTracker.InBattle)
+                {
+                    _announced = false; _earlyMoney = -1; _lastEarly = (-1, -1, -1);
+                    continue;
+                }
                 int state = CurrentState();
                 if (state >= 1 && state < 12)
                 {
@@ -161,7 +169,7 @@ internal sealed unsafe class ResultReader
     {
         if (!IsReadable(MgrG, 8)) return -1;
         nint mgr = *(nint*)MgrG;
-        return IsReadable(mgr + 0x460, 4) ? *(int*)(mgr + 0x458) : -1;
+        return IsReadable(mgr + 0x458, 4) ? *(int*)(mgr + 0x458) : -1;   // was probing +0x460 but reading +0x458 (audit 2026-08-31)
     }
 
     private delegate void SpoilsDelegate(nint expCtx, nint spoils);
@@ -170,17 +178,5 @@ internal sealed unsafe class ResultReader
     private static extern nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
     private static bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
-        byte* buf = stackalloc byte[48];
-        if (VirtualQuery(addr, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;
-        uint protect = *(uint*)(buf + 36);
-        if ((protect & 0x01) != 0 || (protect & 0x100) != 0) return false;
-        nint regionBase = *(nint*)(buf + 0);
-        nint regionSize = *(nint*)(buf + 24);
-        return a + (ulong)size <= (ulong)regionBase + (ulong)regionSize;
-    }
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 }

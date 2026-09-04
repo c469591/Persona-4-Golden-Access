@@ -78,6 +78,7 @@ internal class OverworldNav
         public bool Boundary;
         public int Kind;
         public ushort PersonId;   // live cat-3 unit handle; 0 = static target
+        public string? ModelKey;  // live NPC model base-id ("n1851"); null = unknown / not a person
     }
 
     private sealed class Area
@@ -90,6 +91,15 @@ internal class OverworldNav
     // NPC model base-id ("n1557") → display name ("Nanako"); mined from the
     // AMD texture names (tools/build_npc_names.py → npc_model_names.json)
     private readonly Dictionary<string, string> _npcNames = new();
+    // Per-INSTANCE renames (npc_instance_names.json, 2026-09-04): "area:idhex" -> entries.
+    // An entry with a Model applies only when the live model matches - the same slot id
+    // holds DIFFERENT people on different days / story states (Dojima vs an old woman;
+    // Yumi vs Ayane by club choice - user report). Model "" = legacy any-model entry.
+    private readonly Dictionary<string, List<(string Model, string Base, string Name)>> _npcInstanceNames = new();
+    // Once-per-area people dump so the log accumulates (slot, model) pairs across days.
+    private string _dumpAreaKey = "";
+    private string _dumpSig = "";
+    private long _dumpNextMs;
 
     private readonly Thread _thread;
     private volatile bool _stopped;
@@ -290,6 +300,7 @@ internal class OverworldNav
                 }
                 catch (Exception ex) { Log($"[OverworldNav] npc names load failed: {ex.Message}"); }
             }
+            LoadInstanceNames();
 
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
             foreach (var areaProp in doc.RootElement.GetProperty("areas").EnumerateObject())
@@ -532,7 +543,7 @@ internal class OverworldNav
                 float dx = t.X - px, dz = t.Z - pz;
                 list.Add((t, MathF.Sqrt(dx * dx + dz * dz)));
             }
-            list.Sort((a, b) => a.Item2.CompareTo(b.Item2));
+            FinishSort(list);
             return list;
         }
 
@@ -551,8 +562,18 @@ internal class OverworldNav
             float dx = t.X - px, dz = t.Z - pz;
             list.Add((t, MathF.Sqrt(dx * dx + dz * dz)));
         }
-        list.Sort((a, b) => a.Item2.CompareTo(b.Item2));
+        FinishSort(list);
         return list;
+    }
+
+    /// <summary>Distance order by default; alphabetical (numeric-aware) when the
+    /// "Navigation sorting" setting says so (2026-08-31 - overworld always honors it).</summary>
+    private static void FinishSort(List<(Target t, float dist)> list)
+    {
+        if (ModSettings.GetInt("nav_sort", Defaults.NavSort) == 1)
+            list.Sort((a, b) => DungeonNav.NaturalCompare(a.t.Name ?? "", b.t.Name ?? ""));
+        else
+            list.Sort((a, b) => a.Item2.CompareTo(b.Item2));
     }
 
     // CHECK-prompt NAMING was built and REMOVED 2026-07-09. It named the field
@@ -616,13 +637,15 @@ internal class OverworldNav
             if (used != "none")
             {
                 person++;
-                string name = TryGetNpcModelName(cur) ?? $"NPC {person}";
-                name = OverrideNpcName(areaKey, id, name);
-                outp.Add(new Target { Name = name, X = bx, Z = bz, PersonId = id });
+                string mkey = TryGetNpcModelKey(cur) ?? "";
+                string name = mkey.Length > 0 ? ModelNameOf(mkey) : $"NPC {person}";
+                name = OverrideNpcName(areaKey, id, mkey, name);
+                outp.Add(new Target { Name = name, X = bx, Z = bz, PersonId = id, ModelKey = mkey });
             }
             if (!IsReadable(cur + OFF_NODE_NEXT, 8)) break;
             cur = *(nint*)(cur + OFF_NODE_NEXT);
         }
+        DumpPeopleOnce(areaKey, outp);
         // de-duplicate display names ("Student" ×3 → "Student 1..3")
         var counts = new Dictionary<string, int>();
         foreach (var t in outp)
@@ -650,33 +673,71 @@ internal class OverworldNav
     /// id with the `;` diagnostic (AnnounceSelectedId). For TV-world LOBBY NPCs use
     /// DungeonNav.PlaceNpcNames instead.
     /// </summary>
-    private static string OverrideNpcName(string areaKey, ushort id, string baseName)
+    private string OverrideNpcName(string areaKey, ushort id, string modelKey, string baseName)
     {
-        if (areaKey == "8_2" && id == 0x0C1C) return "Dojima";       // Central Shopping District
-        if (areaKey == "8_2" && id == 0x0C28) return "King Moron";
-        if (areaKey == "6_2" && id == 0x0C35) return "Yumi";         // was "Drama club member"
-        if (areaKey == "9_4" && id == 0x0C34) return "Adachi";       // was "Townsperson"
-        // From database/fixed characters IDs.txt (user-recorded via the `;` diagnostic, 2026-07-02):
-        if (areaKey == "6_2" && id == 0x0C38) return "Daisuke";              // was "Townsperson 6" (Daisuke Nagase)
-        if (areaKey == "6_2" && id == 0x0C37) return "Kou";                  // was "Townsperson 5" (Kou Ichijo)
-        if (areaKey == "8_2" && id == 0x0C3A) return "Adachi";              // was "Townsperson 3"
-        if (areaKey == "8_2" && id == 0x0C3E) return "Yumi";               // was "Drama club member"
-        if (areaKey == "6_1" && id == 0x0C32) return "Naoki Konishi";       // was "Boy"
-        if (areaKey == "10_1" && id == 0x0C06) return "Konishi Liquor Store manager"; // was "Townsperson 4"
-        // From database/fixed characters IDs.txt (user-recorded via the `;` diagnostic, 2026-07-03):
-        if (areaKey == "8_1" && id == 0x0C36) return "Kou";                  // was "Townsperson 2"
-        if (areaKey == "6_6" && id == 0x0C02) return "Timid female student"; // was "Townsperson 2"
-        if (areaKey == "6_2" && id == 0x0C04) return "Shady student";        // was "Townsperson 4"
-        if (areaKey == "6_4" && id == 0x0C02) return "Male student";         // was "Townsperson 2"
-        // From database/fixed characters IDs.txt (user-recorded via the F2 diagnostic, 2026-07-08):
-        // (8_2/0x0C0D "Dojima" REMOVED 2026-07-12 — that handle is SHARED by several
-        // townspeople, so the label misread; 0x0C1C above stays as the real Dojima.)
-        if (areaKey == "9_4" && id == 0x0C00) return "Adachi";               // re-recorded id (also 0x0C34 above)
-        if (areaKey == "6_2" && id == 0x0C07) return "Ms. Sofue";            // was "Townsperson 5"
-        if (areaKey == "8_2" && id == 0x0C07) return "Avid reader";          // was "Townsperson 2"
-        if (areaKey == "6_5" && id == 0x0C01) return "Homely student";       // was "Townsperson 2"
-        if (areaKey == "6_1" && id == 0x0C34) return "Manager Ai Ebihara";   // was "Manager"
-        return baseName;
+        if (!_npcInstanceNames.TryGetValue($"{areaKey}:{id:X4}", out var list)) return baseName;
+        string byBase = "", generic = "";
+        foreach (var (model, bas, name) in list)
+        {
+            if (model.Length > 0) { if (model == modelKey) return name; continue; }   // model-pinned: exact occupant
+            if (bas.Length > 0) { if (bas == baseName && byBase.Length == 0) byBase = name; continue; }
+            if (generic.Length == 0) generic = name;
+        }
+        // Base-pinned: applies only while the slot reads as the generic label the rename was
+        // written against ("Townsperson", "Drama club member"…) — a NAMED occupant (Naoto n609
+        // in Adachi's 9_4 slot, user-caught 2026-09-04; Teddie; "Old woman") keeps its own name.
+        if (byBase.Length > 0) return byBase;
+        return generic.Length > 0 ? generic : baseName;   // legacy any-occupant entry
+    }
+
+    /// <summary>npc_instance_names.json: {"entries":[{"area":"8_2","id":"0C1C","model":"n1620","name":"Dojima"}, ...]}.
+    /// "model" (exact occupant) and "base" (the table label the slot must currently read as) are optional pins. Editable,
+    /// no rebuild (restart the game).</summary>
+    private void LoadInstanceNames()
+    {
+        string ip = DataPath("npc_instance_names.json");
+        if (!File.Exists(ip)) { Log("[OverworldNav] npc_instance_names.json not found - no per-instance renames"); return; }
+        try
+        {
+            using var idoc = JsonDocument.Parse(File.ReadAllText(ip));
+            int n = 0;
+            foreach (var e in idoc.RootElement.GetProperty("entries").EnumerateArray())
+            {
+                string area = e.GetProperty("area").GetString() ?? "";
+                string idh = e.GetProperty("id").GetString() ?? "";
+                if (idh.StartsWith("0x") || idh.StartsWith("0X")) idh = idh.Substring(2);
+                if (!int.TryParse(idh, System.Globalization.NumberStyles.HexNumber, null, out int idv)) continue;
+                string model = e.TryGetProperty("model", out var mv) ? (mv.GetString() ?? "") : "";
+                string bas = e.TryGetProperty("base", out var bv) ? (bv.GetString() ?? "") : "";
+                string name = e.GetProperty("name").GetString() ?? "";
+                if (area.Length == 0 || name.Length == 0) continue;
+                string key = $"{area}:{idv:X4}";
+                if (!_npcInstanceNames.TryGetValue(key, out var list)) _npcInstanceNames[key] = list = new();
+                list.Add((model, bas, name));
+                n++;
+            }
+            Log($"[OverworldNav] npc instance names loaded: {n}");
+        }
+        catch (Exception ex) { Log($"[OverworldNav] npc instance names load failed: {ex.Message}"); }
+    }
+
+    /// <summary>One log line per area whenever the (slot, model) set changes - people stream
+    /// in over a few frames and change by date, so the log accumulates every occupant a slot
+    /// ever had. Rate-limited to one line per 5s.</summary>
+    private void DumpPeopleOnce(string areaKey, List<Target> people)
+    {
+        if (people.Count == 0) return;
+        long now = Environment.TickCount64;
+        if (now < _dumpNextMs) return;
+        var sb = new System.Text.StringBuilder();
+        foreach (var t in people)
+            sb.Append(t.PersonId.ToString("X4")).Append('=').Append(string.IsNullOrEmpty(t.ModelKey) ? "?" : t.ModelKey)
+              .Append('(').Append(t.Name).Append(") ");
+        string sig = sb.ToString();
+        if (areaKey == _dumpAreaKey && sig == _dumpSig) return;
+        _dumpAreaKey = areaKey; _dumpSig = sig; _dumpNextMs = now + 5000;
+        var (m, d) = FieldTracker.GameDate();
+        Log($"[NpcDump] area {areaKey} date {m}/{d}: {sig.TrimEnd()}");
     }
 
     /// <summary>
@@ -718,7 +779,16 @@ internal class OverworldNav
         return db.TryGetValue(m.Groups[1].Value, out var nm) ? nm : "Townsperson";
     }
 
+    private string ModelNameOf(string key) => _npcNames.TryGetValue(key, out var nm) ? nm : "Townsperson";
+
     private unsafe string? TryGetNpcModelName(nint node)
+    {
+        var k = TryGetNpcModelKey(node);
+        return k == null ? null : ModelNameOf(k);
+    }
+
+    /// <summary>The live NPC's model base-id ("n1851") via the model-path chain, or null.</summary>
+    private unsafe string? TryGetNpcModelKey(nint node)
     {
         if (_npcNames.Count == 0) return null;
         if (!IsReadable(node + 0x190, 8)) return null;
@@ -735,9 +805,9 @@ internal class OverworldNav
         string pathStr = System.Text.Encoding.ASCII.GetString(bytes[..len]);
         var m = System.Text.RegularExpressions.Regex.Match(pathStr, @"\\(n\d+)_\d+$");
         if (!m.Success) return null;
-        // Known model → real name; unknown but valid NPC model → the model is
-        // one of the anonymous shared-texture townsfolk.
-        return _npcNames.TryGetValue(m.Groups[1].Value, out var nm) ? nm : "Townsperson";
+        // Known model -> real name (ModelNameOf); unknown but valid NPC model -> one of
+        // the anonymous shared-texture townsfolk ("Townsperson").
+        return m.Groups[1].Value;
     }
 
     private static unsafe bool SubPos(nint node, int subOff, out float x, out float z)
@@ -823,17 +893,44 @@ internal class OverworldNav
         WinBeep(1100, 30);
     }
 
+    // -- STICKY SELECTION (2026-08-31): see DungeonNav - the live rebuild moved the
+    // index off the entry the user was chasing. Relocate by name + nearest position.
+    private string? _stickName; private float _stickX, _stickZ; private bool _stickValid;
+
+    private void RememberStick()
+    {
+        if (_cursor >= 0 && _cursor < _entries.Count)
+        { var t = _entries[_cursor].t; _stickName = t.Name; _stickX = t.X; _stickZ = t.Z; _stickValid = true; }
+    }
+
+    private void RelocateStick()
+    {
+        if (_cursor >= _entries.Count) _cursor = Math.Max(0, _entries.Count - 1);
+        if (!_stickValid || _stickName == null) return;
+        int best = -1; float bestD = float.MaxValue;
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            var t = _entries[i].t;
+            if (t.Name != _stickName) continue;
+            float d = (t.X - _stickX) * (t.X - _stickX) + (t.Z - _stickZ) * (t.Z - _stickZ);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        if (best >= 0) _cursor = best;
+    }
+
     private void StepEntry(int dir)
     {
         if (_catIndex < 0) { Speech.Say("Pick a category with minus or equals first.", true); return; }
         Cat cat = Categories[_catIndex];
         _entries = BuildCategory(cat);
         if (_entries.Count == 0) { Speech.Say($"{CatName(cat)}: none here.", true); return; }
+        RelocateStick();
 
         int next = _cursor + dir;
         if (next < 0) { Speech.Say("First. ", false); next = 0; }
         else if (next >= _entries.Count) { Speech.Say("Last. ", false); next = _entries.Count - 1; }
         _cursor = next;
+        RememberStick();
 
         SetSelection(_entries[_cursor].t);
         Speech.Say($"{Say(_entries[_cursor])}, {_cursor + 1} of {_entries.Count}.", true);
@@ -895,8 +992,10 @@ internal class OverworldNav
         int maj = FieldTracker.CurrentMajor, min = FieldTracker.CurrentMinor;
         string hex = t.PersonId.ToString("X4");
         string spoken = string.Join(" ", hex.ToCharArray());   // digit-by-digit so the reader doesn't mangle it
-        Speech.Say($"{t.Name}. Area {maj} {min}. Id {spoken}.", true);
-        Log($"[OverworldNav] ID DIAG: area {maj}_{min} id 0x{hex} name '{t.Name}'");
+        string mk = string.IsNullOrEmpty(t.ModelKey) ? "unknown" : t.ModelKey;
+        string mkSpoken = mk == "unknown" ? mk : "n " + string.Join(" ", mk.Substring(1).ToCharArray());
+        Speech.Say($"{t.Name}. Area {maj} {min}. Id {spoken}. Model {mkSpoken}.", true);
+        Log($"[OverworldNav] ID DIAG: area {maj}_{min} id 0x{hex} model {mk} name '{t.Name}'");
     }
 
     private static string CalibKey(Target t) => $"{(int)MathF.Round(t.BX)}_{(int)MathF.Round(t.BZ)}_{t.Name}";
@@ -2151,35 +2250,6 @@ internal class OverworldNav
     [DllImport("kernel32.dll")]
     private static extern unsafe nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
-    private static unsafe bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0 || size <= 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a + (ulong)size > 0x00007FFFFFFFFFFFUL) return false;
-        const int MBI_SIZE = 48;
-        const int OFF_BASE = 0;          // BaseAddress
-        const int OFF_REGIONSIZE = 24;   // RegionSize
-        const int OFF_STATE = 32;
-        const int OFF_PROTECT = 36;
-        const uint MEM_COMMIT = 0x1000;
-        const uint PAGE_NOACCESS = 0x01;
-        const uint PAGE_GUARD = 0x100;
-        byte* buf = stackalloc byte[MBI_SIZE];
-        ulong end = a + (ulong)size;
-        ulong cursor = a;
-        int guard = 0;
-        while (cursor < end && guard++ < 8)
-        {
-            if (VirtualQuery((nint)cursor, buf, MBI_SIZE) == 0) return false;
-            uint state = *(uint*)(buf + OFF_STATE);
-            uint protect = *(uint*)(buf + OFF_PROTECT);
-            if (state != MEM_COMMIT) return false;
-            if ((protect & PAGE_NOACCESS) != 0) return false;
-            if ((protect & PAGE_GUARD) != 0) return false;
-            ulong regBase = *(ulong*)(buf + OFF_BASE);
-            ulong regSize = *(ulong*)(buf + OFF_REGIONSIZE);
-            cursor = regBase + regSize;
-        }
-        return cursor >= end;
-    }
+    private static bool IsReadable(nint addr, int size)
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 }

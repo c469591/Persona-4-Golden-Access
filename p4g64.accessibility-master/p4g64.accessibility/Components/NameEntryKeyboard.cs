@@ -174,13 +174,7 @@ internal unsafe class NameEntryKeyboard : IDisposable
     [DllImport("kernel32.dll", EntryPoint = "VirtualQuery")]
     private static extern nint VirtualQuery(nint a, byte* b, nint l);
     private static bool IsReadable(long addr)
-    {
-        byte* buf = stackalloc byte[48];
-        if (VirtualQuery((nint)addr, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;     // MEM_COMMIT
-        uint p = *(uint*)(buf + 36);
-        return (p & 0x01) == 0 && (p & 0x100) == 0;          // not NOACCESS / GUARD
-    }
+        => Utils.ProbeReadable((nint)addr, 8);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     public void Dispose() { }
 }

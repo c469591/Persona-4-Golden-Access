@@ -126,6 +126,7 @@ internal unsafe class ShopMenu
     // ── Hook state ───────────────────────────────────────────────────────
     private IHook<ShopUpdateDelegate>? _hook;
     private static ShopStruct* _lastPtr;
+    private static int _staleStrikes;   // stale-latch kill counter (2026-08-31)
     private int   _lastCursor    = -1;   // outer cursor (pShop+0x35C)
     private short _lastCursor032 = -1;   // inner cursor (pShop+0x032)
     // Written by DaidaraCharSelect's hook (it announces character names).
@@ -704,28 +705,7 @@ internal unsafe class ShopMenu
     private static extern nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
     private static bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000 || a > 0x00007FFFFFFFFFFFUL) return false;
-
-        const int  MBI_SIZE    = 48;
-        const int  OFF_STATE   = 32;
-        const int  OFF_PROTECT = 36;
-        const uint MEM_COMMIT    = 0x1000;
-        const uint PAGE_NOACCESS = 0x01;
-        const uint PAGE_GUARD    = 0x100;
-
-        byte* buf = stackalloc byte[MBI_SIZE];
-        if (VirtualQuery(addr, buf, MBI_SIZE) == 0) return false;
-
-        uint state   = *(uint*)(buf + OFF_STATE);
-        uint protect = *(uint*)(buf + OFF_PROTECT);
-        if (state   != MEM_COMMIT)    return false;
-        if ((protect & PAGE_NOACCESS) != 0) return false;
-        if ((protect & PAGE_GUARD)    != 0) return false;
-        return true;
-    }
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     // ── Weapon/armor stats + equipped comparison for the shop description window ──
     // Reads the candidate item's numbers from the runtime stat table, then appends
@@ -956,6 +936,22 @@ internal unsafe class ShopMenu
                 // 0x07 top · 0x08/0x09 charselect · 0x0A LIST · 0x0B DESC ·
                 // 0x12 sell · 0x1C talk · 0x1E+ teardown.
                 ushort state = ReadShopState(ptr);
+
+                // ── STALE-LATCH KILL (2026-08-31, the "random five-digit numbers" bug) ──
+                // The freed shop struct often STAYS READABLE, so the IsReadable clear path
+                // below never runs and this poll kept reading REUSED HEAP for the rest of
+                // the session (bare qty numbers spoken at 20Hz in the Velvet Room / camp —
+                // player report; same class as the 07-07 ActiveBtlInfo bug). The struct's
+                // own state word is the self-evident liveness signal: a real shop sits in
+                // 0x00..0x1D; teardown (0x1E..0x23) lasts frames, and reused memory reads
+                // arbitrary values. ~500ms of not-interactive ⇒ the shop is gone: clear.
+                if (state > 0x1D) { if (++_staleStrikes >= 10) {
+                    _lastPtr = null; _active = false; _shopState = ST_NONE; _announceListIn = 0; _staleStrikes = 0;
+                    Log($"[ShopMenu] stale latch cleared (state=0x{state:X2} not interactive for ~500ms)");
+                    continue;
+                } }
+                else _staleStrikes = 0;
+
                 if (state <= 0x23 && state != _shopState)
                 {
                     ushort prev = _shopState;

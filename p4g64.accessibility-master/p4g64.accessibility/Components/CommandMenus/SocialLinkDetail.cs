@@ -66,7 +66,15 @@ internal sealed unsafe class SocialLinkDetail
         // Fast gate: direct static read, no syscall.
         nint pCamp = *(nint*)PCampPtrAddr;
         if (pCamp == 0 || !IsReadable(pCamp + OffOpenMask, 4)) return;
-        if ((*(int*)(pCamp + OffOpenMask) & SLinkMaskBit) == 0)
+        int mask = *(int*)(pCamp + OffOpenMask);
+        // Camp-mask SANITY (audit 2026-08-31): pCamp is garbage-non-zero on dungeon floors and
+        // garbage can set our bit — PlayerMenu's rule: a real mask is nonzero with only low bits.
+        if (mask == 0 || (mask & ~0x1FF) != 0)
+        {
+            if (_firstObj != -1) { _firstObj = -1; _lineObj = -1; _leftFirst = false; _line.Clear(); _full.Clear(); }
+            return;
+        }
+        if ((mask & SLinkMaskBit) == 0)
         {
             if (_firstObj != -1) { _firstObj = -1; _lineObj = -1; _leftFirst = false; _line.Clear(); _full.Clear(); }
             return;
@@ -150,23 +158,14 @@ internal sealed unsafe class SocialLinkDetail
         if (!IsReadable((nint)PCampPtrAddr, 8)) return false;
         nint pCamp = *(nint*)PCampPtrAddr;
         if (pCamp == 0 || !IsReadable(pCamp + OffOpenMask, 4)) return false;
-        return (*(int*)(pCamp + OffOpenMask) & SLinkMaskBit) != 0;
+        int mask = *(int*)(pCamp + OffOpenMask);
+        if (mask == 0 || (mask & ~0x1FF) != 0) return false;   // camp-mask sanity (audit 2026-08-31)
+        return (mask & SLinkMaskBit) != 0;
     }
 
     private static string ReadCString(nint p, int maxLen) => ReadCStringRpm(p, maxLen);  // RPM since 2026-07-27 (menu-heaviness fix: VirtualQuery stalls under allocator contention)
 
     [DllImport("kernel32.dll")] private static extern nint VirtualQuery(nint a, byte* b, nint l);
     private static bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
-        byte* buf = stackalloc byte[48];
-        if (VirtualQuery(addr, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;
-        uint pr = *(uint*)(buf + 36);
-        if ((pr & 0x01) != 0 || (pr & 0x100) != 0) return false;
-        nint rb = *(nint*)(buf + 0); nint rs = *(nint*)(buf + 24);
-        return a + (ulong)size <= (ulong)rb + (ulong)rs;
-    }
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 }

@@ -565,6 +565,58 @@ internal class DungeonNav
         WinBeep(1100, 30);
     }
 
+    // -- STICKY SELECTION + SORT MODE + LOBBY PLACE CACHE (2026-08-31, player feedback) --
+    private string? _stickLabel; private float _stickX, _stickZ; private bool _stickValid;
+
+    private void RememberStick()
+    {
+        if (_cursor >= 0 && _cursor < _entries.Count)
+        { var e = _entries[_cursor]; _stickLabel = e.Label; _stickX = e.TX; _stickZ = e.TZ; _stickValid = e.HasPos; }
+    }
+
+    /// <summary>The list is rebuilt (and re-sorted) live on every step - an index alone points
+    /// at a DIFFERENT thing after the player moved. Re-locate the remembered entry (label +
+    /// nearest position) in the fresh list so stepping continues from the same THING.</summary>
+    private void RelocateStick()
+    {
+        if (_cursor >= _entries.Count) _cursor = Math.Max(0, _entries.Count - 1);
+        if (!_stickValid || _stickLabel == null) return;
+        int best = -1; float bestD = float.MaxValue;
+        for (int i = 0; i < _entries.Count; i++)
+        {
+            var e = _entries[i];
+            if (e.Label != _stickLabel) continue;
+            float d = (e.TX - _stickX) * (e.TX - _stickX) + (e.TZ - _stickZ) * (e.TZ - _stickZ);
+            if (d < bestD) { bestD = d; best = i; }
+        }
+        if (best >= 0) _cursor = best;
+    }
+
+    /// <summary>Alphabetical with numeric awareness ("NPC 3" before "NPC 12").</summary>
+    internal static int NaturalCompare(string a, string b)
+    {
+        int ia = 0, ib = 0;
+        while (ia < a.Length && ib < b.Length)
+        {
+            char ca = a[ia], cb = b[ib];
+            if (char.IsDigit(ca) && char.IsDigit(cb))
+            {
+                int sa = ia, sb = ib;
+                while (ia < a.Length && char.IsDigit(a[ia])) ia++;
+                while (ib < b.Length && char.IsDigit(b[ib])) ib++;
+                long na = long.Parse(a.Substring(sa, ia - sa)), nb = long.Parse(b.Substring(sb, ib - sb));
+                if (na != nb) return na.CompareTo(nb);
+            }
+            else
+            {
+                int c = char.ToUpperInvariant(ca).CompareTo(char.ToUpperInvariant(cb));
+                if (c != 0) return c;
+                ia++; ib++;
+            }
+        }
+        return (a.Length - ia).CompareTo(b.Length - ib);
+    }
+
     private void StepEntry(int dir)
     {
         if (_catIndex < 0)
@@ -581,11 +633,13 @@ internal class DungeonNav
             Speech.Say($"{CatName(cat)}: none nearby.", true);
             return;
         }
+        RelocateStick();   // keep the cursor on the THING it was on, not the index
 
         int next = _cursor + dir;
         if (next < 0) { Speech.Say("First. ", false); next = 0; }
         else if (next >= _entries.Count) { Speech.Say("Last. ", false); next = _entries.Count - 1; }
         _cursor = next;
+        RememberStick();
 
         UpdateSelectionTarget();
         // Interactables: NAME first (better readability, user 2026-07-02); other categories keep "N of M: …".
@@ -604,7 +658,7 @@ internal class DungeonNav
         // Refresh so we act on a current selection.
         _entries = BuildCategory(cat);
         if (_entries.Count == 0) { Speech.Say("Nothing selected.", true); return; }
-        if (_cursor >= _entries.Count) _cursor = _entries.Count - 1;
+        RelocateStick();
 
         var e = _entries[_cursor];
         // \ just re-announces the selection — no keybind hint (it names keyboard keys, which is noise
@@ -823,18 +877,26 @@ internal class DungeonNav
 
     // ── Category builders ──
 
-    private List<Entry> BuildCategory(Cat cat) => cat switch
+    private List<Entry> BuildCategory(Cat cat)
     {
-        Cat.Doors => BuildInteractableEntries(Kind.Door, "Door"),
-        Cat.AllDoors => BuildInteractableEntries(Kind.Door, "Door", activeOnly: false),
-        // Chests from the dedicated treasure array (not the noisy scene singles).
-        Cat.Chests => BuildChestEntries(),
-        Cat.Shadows => BuildShadowEntries(),
-        Cat.Exits => BuildExitEntries(),
-        Cat.Places => BuildPlaceEntries(),
-        Cat.Events => BuildEventEntries(),
-        _ => new()
-    };
+        var list = cat switch
+        {
+            Cat.Doors => BuildInteractableEntries(Kind.Door, "Door"),
+            Cat.AllDoors => BuildInteractableEntries(Kind.Door, "Door", activeOnly: false),
+            // Chests from the dedicated treasure array (not the noisy scene singles).
+            Cat.Chests => BuildChestEntries(),
+            Cat.Shadows => BuildShadowEntries(),
+            Cat.Exits => BuildExitEntries(),
+            Cat.Places => BuildPlaceEntries(),
+            Cat.Events => BuildEventEntries(),
+            _ => new()
+        };
+        // Alphabetical sorting applies in LOBBIES only (user call 2026-08-31): dungeon
+        // floors stay nearest-first, lobbies are browsy places with named people.
+        if (InLobby() && ModSettings.GetInt("nav_sort", Defaults.NavSort) == 1)
+            list.Sort((a, b) => NaturalCompare(a.Label ?? a.Say, b.Label ?? b.Say));
+        return list;
+    }
 
     // Event marks for the CURRENT floor, nearest-first, as routable entries. The
     // label is whatever was authored ("Stairs", "Event door"); Backspace walks
@@ -907,9 +969,10 @@ internal class DungeonNav
             }
             float dist = havePos ? MathF.Sqrt((m.X - px) * (m.X - px) + (m.Z - pz) * (m.Z - pz)) : 0;
             int steps = AutoWalk.RouteSpeech.StepsFromUnits(dist);
+            string mdir = havePos ? " " + WorldDirection(m.X - px, m.Z - pz) : "";
             list.Add(new Entry
             {
-                Say = $"{m.Label}, {steps} step{(steps == 1 ? "" : "s")}",
+                Say = $"{m.Label}{mdir}, {steps} step{(steps == 1 ? "" : "s")}",
                 Dist = dist, FloorDir = 0, Label = m.Label,
                 HasPos = true, TX = m.X, TZ = m.Z
             });
@@ -941,7 +1004,8 @@ internal class DungeonNav
             {
                 float dist = havePos ? MathF.Sqrt((x - px) * (x - px) + (z - pz) * (z - pz)) : 0;
                 int steps = AutoWalk.RouteSpeech.StepsFromUnits(dist);
-                list.Add(new Entry { Say = $"{lbl}, {steps} steps", Dist = dist, FloorDir = 0,
+                string dir = havePos ? " " + WorldDirection(x - px, z - pz) : "";
+                list.Add(new Entry { Say = $"{lbl}{dir}, {steps} steps", Dist = dist, FloorDir = 0,
                                      Label = lbl, HasPos = true, TX = x, TZ = z });
             }
             return list;
@@ -981,7 +1045,8 @@ internal class DungeonNav
             var (x, z) = uniq[i];
             float dist = havePos ? MathF.Sqrt((x - px) * (x - px) + (z - pz) * (z - pz)) : 0;
             int steps = AutoWalk.RouteSpeech.StepsFromUnits(dist);
-            string say = uniq.Count > 1 ? $"Stairs {i + 1}, {steps} steps" : $"Stairs, {steps} steps";
+            string dir = havePos ? " " + WorldDirection(x - px, z - pz) : "";   // same fixed compass as chests / the H cursor
+            string say = uniq.Count > 1 ? $"Stairs {i + 1}{dir}, {steps} steps" : $"Stairs{dir}, {steps} steps";
             list.Add(new Entry { Say = say, Dist = dist, FloorDir = 0,
                                  Label = "Stairs", HasPos = true, TX = x, TZ = z });
         }
@@ -1057,7 +1122,9 @@ internal class DungeonNav
             int steps = Math.Max(1, (int)MathF.Round(dist / WorldPerStep));
             string dir = WorldDirection(dx, dz);   // fixed compass (same as the H cursor)
             // A door the player/auto-walker has walked THROUGH reads "Open door".
-            string label = (want == Kind.Door && IsDoorOpenMarked(x, z)) ? "Open door" : noun;
+            string label = want != Kind.Door ? noun
+                         : IsDoorLocked(x, z) ? "Locked door"
+                         : IsDoorOpenMarked(x, z) ? "Open door" : noun;
             list.Add(new Entry { Say = $"{label} {dir}, {steps} step{(steps == 1 ? "" : "s")}", Dist = dist,
                                  Label = label, HasPos = true, TX = x, TZ = z, NX = nx, NZ = nz });
         }
@@ -1101,9 +1168,33 @@ internal class DungeonNav
             list.Add(new Entry { Say = $"{label} {dir}, {steps} step{(steps == 1 ? "" : "s")}", Dist = dist,
                                  Label = label, HasPos = true, TX = x, TZ = z });
         }
+        // -- SEEN-CACHE (2026-08-31): the game deactivates FAR lobby actors (streaming), so
+        // people vanished from this list until you walked close (player report). Once seen
+        // this visit, keep them listed at their last-known position until the floor changes.
+        // Key on floor AND in-game date: loading another save (same lobby, different day)
+        // must NOT resurrect cached people who do not exist in that save (spoiler leak,
+        // caught live 2026-09-01 — an early save showed the late save's full roster).
+        var (cacheMon, cacheDay) = FieldTracker.GameDate();
+        string floorKey = $"{FieldTracker.CurrentMajor}_{FieldTracker.CurrentMinor}_{cacheMon}_{cacheDay}";
+        if (floorKey != _placeCacheKey) { _placeCache.Clear(); _placeCacheKey = floorKey; }
+        foreach (var e in list) _placeCache[e.Label] = (e.TX, e.TZ);
+        foreach (var kv in _placeCache)
+        {
+            bool present = false;
+            foreach (var e in list) if (e.Label == kv.Key) { present = true; break; }
+            if (present) continue;
+            float cdx = kv.Value.x - px, cdz = kv.Value.z - pz;
+            float cdist = MathF.Sqrt(cdx * cdx + cdz * cdz);
+            int csteps = Math.Max(1, (int)MathF.Round(cdist / WorldPerStep));
+            list.Add(new Entry { Say = $"{kv.Key} {WorldDirection(cdx, cdz)}, {csteps} step{(csteps == 1 ? "" : "s")}",
+                                 Dist = cdist, Label = kv.Key, HasPos = true, TX = kv.Value.x, TZ = kv.Value.z });
+        }
         list.Sort((a, b) => a.Dist.CompareTo(b.Dist));
         return list;
     }
+
+    private readonly Dictionary<string, (float x, float z)> _placeCache = new();
+    private string _placeCacheKey = "";
 
     // cat=5 master-table id → display name for lobby NPCs. The live model-path
     // resolver returns nothing on these nodes (verified 2026-06-17), so names
@@ -1394,7 +1485,7 @@ internal class DungeonNav
     private static unsafe List<(float x, float z, Kind kind, int count, float nx, float nz)> EnumerateInteractables(bool activeOnly = true)
     {
         // 1. Collect every (active) node's position (no dedup yet).
-        var raw = new List<(float x, float z)>();
+        var raw = new List<(float x, float z, int id)>();
         if (IsReadable(SceneRootPtr, 8))
         {
             nint sceneRoot = *(nint*)SceneRootPtr;
@@ -1415,7 +1506,8 @@ internal class DungeonNav
                             if (xf != 0 && IsReadable(xf + OFF_ACTOR_Z, 4))
                             {
                                 float x = *(float*)(xf + OFF_ACTOR_X), z = *(float*)(xf + OFF_ACTOR_Z);
-                                if (float.IsFinite(x) && float.IsFinite(z) && (x != 0f || z != 0f)) raw.Add((x, z));
+                                int nid = IsReadable(node, 2) ? *(ushort*)node : 0;
+                                if (float.IsFinite(x) && float.IsFinite(z) && (x != 0f || z != 0f)) raw.Add((x, z, nid));
                             }
                         }
                         if (!IsReadable(node + OFF_NODE_NEXT, 8)) break;
@@ -1433,7 +1525,8 @@ internal class DungeonNav
         var sumX = new List<float>(); var sumZ = new List<float>(); var cnt = new List<int>();
         var m1x = new List<float>(); var m1z = new List<float>();
         var m2x = new List<float>(); var m2z = new List<float>();
-        foreach (var (x, z) in raw)
+        var ids = new List<List<int>>();
+        foreach (var (x, z, nid) in raw)
         {
             int idx = -1;
             for (int i = 0; i < cnt.Count; i++)
@@ -1443,11 +1536,13 @@ internal class DungeonNav
             {
                 sumX.Add(x); sumZ.Add(z); cnt.Add(1);
                 m1x.Add(x); m1z.Add(z); m2x.Add(float.NaN); m2z.Add(float.NaN);
+                ids.Add(new List<int> { nid });
             }
             else
             {
                 sumX[idx] += x; sumZ[idx] += z; cnt[idx]++;
                 if (float.IsNaN(m2x[idx])) { m2x[idx] = x; m2z[idx] = z; }
+                ids[idx].Add(nid);
             }
         }
 
@@ -1457,6 +1552,7 @@ internal class DungeonNav
         // @(16800,26400), verified 2026-07-02) — reclassify it to Chest so it doesn't show as a door.
         var chestPos = ActiveChestPositions();
         var outp = new List<(float, float, Kind, int, float, float)>();
+        var doorIds = new Dictionary<(float, float), List<int>>();
         for (int i = 0; i < cnt.Count; i++)
         {
             float cx = sumX[i] / cnt[i], cz = sumZ[i] / cnt[i];
@@ -1473,8 +1569,51 @@ internal class DungeonNav
                 if (m > 1f) { nx = -az / m; nz = ax / m; }
             }
             outp.Add((cx, cz, kind, cnt[i], nx, nz));
+            if (kind == Kind.Door) doorIds[(MathF.Round(cx / 100f), MathF.Round(cz / 100f))] = ids[i];
         }
+        lock (_doorIdsLock) _doorIds = doorIds;
         return outp;
+    }
+
+    // ── LOCKED DOORS (2026-09-04, Bath #3 player reports) ─────────────────────
+    // A door's game handle = the scene node's u16 id (category 10 → 10240 + index); the
+    // dungeon script (dungeon.flow dng_door → sauna_03F_door etc.) keys its LOCK logic on
+    // exactly that id. Rows below = `dungeon_named_floor_map.json` named_doors with
+    // kind "locked_door": passable when the OPENED bit is set or the KEY bit is set.
+    // The planner treats a locked door as a wall (routes via the other door); the
+    // browser labels it "Locked door". Story "scripted_door" rows are NOT here on purpose.
+    private static readonly (int floorId, int doorId, int openedBit, int keyBit)[] LockedDoorTable =
+    {
+        // ⚠ BOUNDED to Bath #3 for now (user call 2026-09-04: "so this logic can't break any
+        // other dungeon"). Castle 5F's two locked doors (10240 opened 3685 / 10255 opened 3686,
+        // both key 3684, floor id 10) are known from the same table — add them only after a
+        // live check on that floor.
+        (23, 10246, 3714, 3715),   // Steamy Bathhouse Bath #3, sauna_03F_door (key bit 3715)
+    };
+    private static readonly object _doorIdsLock = new();
+    private static Dictionary<(float, float), List<int>> _doorIds = new();
+
+    /// <summary>True when the door at (x,z) is one of the table's locked doors on the CURRENT
+    /// floor and neither its opened bit nor its key bit is set (live BIT read).</summary>
+    internal static bool IsDoorLocked(float x, float z)
+    {
+        int floorId = FieldTracker.DungeonFloorId();
+        if (floorId <= 0) return false;
+        List<int>? ids = null;
+        lock (_doorIdsLock)
+        {
+            var k = (MathF.Round(x / 100f), MathF.Round(z / 100f));
+            if (!_doorIds.TryGetValue(k, out ids))
+                foreach (var kv in _doorIds)
+                    if (MathF.Abs(kv.Key.Item1 - k.Item1) <= 3 && MathF.Abs(kv.Key.Item2 - k.Item2) <= 3) { ids = kv.Value; break; }
+        }
+        if (ids == null) return false;
+        foreach (var (fid, did, opened, key) in LockedDoorTable)
+        {
+            if (fid != floorId || !ids.Contains(did)) continue;
+            return !FlagBitSet(opened) && !FlagBitSet(key);
+        }
+        return false;
     }
 
     /// <summary>World XZ of every ACTIVE treasure-array chest (opened OR not) — used to keep chests out
@@ -1539,8 +1678,16 @@ internal class DungeonNav
                 if (!isGaze && !isMarker && !isMirror && posOk)
                 {
                     bool dup = false;
-                    foreach (var (ex, ez, _, _, _) in outp)
-                        if (MathF.Abs(ex - x) < PlaceDedupUnits && MathF.Abs(ez - z) < PlaceDedupUnits) { dup = true; break; }
+                    foreach (var (ex, ez, ecat, eid, _) in outp)
+                        if (MathF.Abs(ex - x) < PlaceDedupUnits && MathF.Abs(ez - z) < PlaceDedupUnits)
+                        {
+                            // Two cat=5 rows with DIFFERENT ids are DIFFERENT PEOPLE — never merge.
+                            // (2026-09-01: on the TV-world Entrance stage the party stands clustered;
+                            // Chie sat 192u from Naoto and Yosuke 141u from the Fox — both were eaten
+                            // by this dedup, whose real job is collapsing duplicate LABEL rows.)
+                            if (cat == 5 && ecat == 5 && id != eid) continue;
+                            dup = true; break;
+                        }
                     if (!dup) outp.Add((x, z, cat, id, cur));
                 }
 
@@ -1780,24 +1927,6 @@ internal class DungeonNav
     [DllImport("kernel32.dll")]
     private static extern unsafe nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
-    private static unsafe bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
-        const int MBI_SIZE = 48;
-        const int OFF_STATE = 32;
-        const int OFF_PROTECT = 36;
-        const uint MEM_COMMIT = 0x1000;
-        const uint PAGE_NOACCESS = 0x01;
-        const uint PAGE_GUARD = 0x100;
-        byte* buf = stackalloc byte[MBI_SIZE];
-        if (VirtualQuery(addr, buf, MBI_SIZE) == 0) return false;
-        uint state = *(uint*)(buf + OFF_STATE);
-        uint protect = *(uint*)(buf + OFF_PROTECT);
-        if (state != MEM_COMMIT) return false;
-        if ((protect & PAGE_NOACCESS) != 0) return false;
-        if ((protect & PAGE_GUARD) != 0) return false;
-        return true;
-    }
+    private static bool IsReadable(nint addr, int size)
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 }

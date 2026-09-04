@@ -349,13 +349,7 @@ internal unsafe class MovieDescription : IDisposable
     private static extern nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
     private static bool IsReadable(long addr, int size)
-    {
-        if (addr == 0) return false;
-        byte* buf = stackalloc byte[48];
-        if (VirtualQuery((nint)addr, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;
-        return (*(uint*)(buf + 36) & (0x01 | 0x100)) == 0;
-    }
+        => Utils.ProbeReadable((nint)addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     public void Dispose() { _running = false; Stop(); }
 }

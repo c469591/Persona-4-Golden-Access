@@ -40,6 +40,9 @@ internal unsafe class FieldTracker
     // Confirmed via snapshot comparison: 0 = no interactable nearby, 1 = CHECK!! prompt visible
     private static readonly int* _interactFlag = (int*)0x1411BC7F4L;
     private int _lastInteractFlag = -1;
+    /// <summary>True only while the field is genuinely live (seg-misc readable, major>0)
+    /// — unlike CurrentMajor, which goes stale at the title screen. Refreshed every poll.</summary>
+    internal static bool InFieldLive;
 
     private int   _lastMajor      = -1;
     private int   _lastMinor      = -1;
@@ -1003,6 +1006,20 @@ internal unsafe class FieldTracker
         }
         catch (Exception e) { Log($"[Collision] wrapper setup failed: {e.Message}"); }
 
+        // ★ CAMERA SLEW (2026-08-27): the game's own eased camera rotate — the machinery
+        // behind the R recenter and door auto-pans. FUN_1402d6bb0(parent=0, frames, targetDeg):
+        // absolute target yaw in DEGREES (wraps at ±360), eased over `frames` frames by a
+        // registered task; field object comes from a global inside. Must be CALLED ON THE
+        // GAME THREAD (it registers in the task list) — pumped via MoveTickDetour like the
+        // collision probes. Gated in-game on field mode ∈ {0,6,7} (walking/free camera).
+        try
+        {
+            _camSlew = hooks.CreateWrapper<CamSlewDelegate>(unchecked((nint)0x1402D6BB0L), out _);
+            _camRot = hooks.CreateWrapper<CamRotDelegate>(unchecked((nint)0x1402D4C80L), out _);
+            Log("[Camera] slew wrapped @0x1402D6BB0, rotate @0x1402D4C80");
+        }
+        catch (Exception e) { Log($"[Camera] slew wrapper setup failed: {e.Message}"); }
+
         // ★ THE DIRECTIONAL SENSOR (2026-07-16): wrap the game's OWN sphere-
         // OVERLAP-vs-wall test (FUN_14032b810 — the movement tick's own wall
         // resolve). It answers "is any wall within `radius` of this point?" +
@@ -1042,6 +1059,38 @@ internal unsafe class FieldTracker
     // CONSTRUCTION, whatever the matrix convention we could never derive.
     private delegate int NearestCollDelegate(nint pos, nint outPt, nint scene);
     private static NearestCollDelegate? _nearestColl;
+
+    private delegate long CamSlewDelegate(long parent, int frames, float targetDeg);
+    private static CamSlewDelegate? _camSlew;
+    private static volatile bool _camSlewPending;
+    private static float _camSlewDeg; private static int _camSlewFrames;
+
+    // Direct per-frame rotate (the routine the easing task itself calls): rotates the camera
+    // basis by a delta around up and re-commits. fieldObj = *(0x1411AB2C8). Units probed live
+    // by CameraNorth (the eased wrapper's target param proved meaningless — log 2026-08-29).
+    private delegate void CamRotDelegate(long fieldObj, float delta);
+    private static CamRotDelegate? _camRot;
+    private static volatile bool _camRotPending;
+    private static float _camRotDelta;
+
+    /// <summary>Rotate the camera by a raw delta (units per the caller's calibration) on the
+    /// game thread at the next move tick. False if unavailable.</summary>
+    internal static bool RequestCameraRotate(float delta)
+    {
+        if (_camRot == null) return false;
+        _camRotDelta = delta; _camRotPending = true;
+        return true;
+    }
+
+    /// <summary>Request the game's own eased camera rotate to an absolute yaw (degrees, its
+    /// convention) — executed on the game thread at the next move tick. False if unavailable.</summary>
+    internal static bool RequestCameraSlew(float targetDeg, int frames)
+    {
+        if (_camSlew == null) return false;
+        _camSlewDeg = targetDeg; _camSlewFrames = Math.Max(1, frames);
+        _camSlewPending = true;
+        return true;
+    }
 
     // The SWEPT-sphere-vs-wall test the movement tick itself calls to resolve
     // motion. FIVE args (the 5th — the sweep DIRECTION vec3 — is staged on the
@@ -1449,6 +1498,23 @@ internal unsafe class FieldTracker
             _probePending = false;
             try { RunCardinalProbe(); }
             catch (Exception e) { Log($"[Collision] probe error: {e.Message}"); }
+        }
+        if (_camSlewPending)
+        {
+            _camSlewPending = false;
+            try { _camSlew?.Invoke(0, _camSlewFrames, _camSlewDeg); }
+            catch (Exception e) { Log($"[Camera] slew error: {e.Message}"); }
+        }
+        if (_camRotPending)
+        {
+            _camRotPending = false;
+            try
+            {
+                long fieldObj;
+                unsafe { if (!Utils.TryReadRaw(unchecked((nint)0x1411AB2C8L), &fieldObj, 8)) fieldObj = 0; }
+                if (fieldObj != 0) _camRot?.Invoke(fieldObj, _camRotDelta);
+            }
+            catch (Exception e) { Log($"[Camera] rotate error: {e.Message}"); }
         }
         if (_segPending)
         {
@@ -3393,6 +3459,12 @@ internal unsafe class FieldTracker
             }
         }
 
+        // Live "actually standing in the world" flag (2026-09-02): CurrentMajor
+        // goes STALE at the title screen / menus (never reset), which let the
+        // world-helper keys read the last room from the title. This is the
+        // seg-misc-backed truth, refreshed every poll.
+        InFieldLive = inField;
+
         // --- Interactable nearby ---
         if (inField)
         {
@@ -3412,15 +3484,24 @@ internal unsafe class FieldTracker
                     // session crashes (it was the final log entry before the
                     // first one). The binding question it probed is solved
                     // (database/OVERWORLD.md).
-                    // CHECK-prompt NAMING was tried 2026-07-09 and REMOVED: naming the
-                    // interactable is a geometry guess (~90%) because the game never
-                    // exposes the selected field object (slot arrays null in overworld,
-                    // scanner hook crashes, no on-screen name — see the deep-research
-                    // notes). A confidently-WRONG name misdirects a blind player worse
-                    // than none, so we speak the honest plain "Check". Don't re-add
-                    // without a real selected-object source.
-                    Speech.Say("Check", true);
+                    // CHECK-prompt NAMING v2 (2026-09-02): the 2026-07-09 geometry-guess
+                    // version was removed for guessing (~90%) — but the game DOES draw
+                    // the target's name (the yellow label bar: "Futon", "Sofa") through
+                    // FUN_140450C60, TextSpy-proven. CheckLabel latches that draw = the
+                    // game's OWN word, never a guess; no fresh latch → plain "Check"
+                    // (some prompts are unlabeled). memory/world_helper_zones.md.
+                    // (The 1.5s same-text cooldown that briefly lived here was removed
+                    // on user request 2026-09-02 — the real spam source was the hook-side
+                    // change announcer, fixed by CheckLabel's stability gate.)
+                    // interrupt:false (user request 2026-09-02): a zone-crossing name
+                    // often speaks in the same instant — the check QUEUES after it
+                    // instead of cutting it off ("Sofa." → "Check: Sofa").
+                    string? lbl = CheckLabel.TakeForRise();
+                    if (SoundSettings.CheckSoundOn) PlayCheckCue(SoundSettings.CheckVol);
+                    Speech.Say(lbl != null ? $"Check: {lbl}" : "Check", interrupt: false);
                 }
+                else
+                    CheckLabel.OnPromptGone();
             }
         }
     }
@@ -5803,25 +5884,7 @@ internal unsafe class FieldTracker
     // Every unsafe memory read on a value that might not be a real pointer must go through
     // this guard first. Mirrors the implementation in ShopMenu/Item.
     private static bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
-        const int MBI_SIZE = 48;
-        const int OFF_STATE = 32;
-        const int OFF_PROTECT = 36;
-        const uint MEM_COMMIT = 0x1000;
-        const uint PAGE_NOACCESS = 0x01;
-        const uint PAGE_GUARD = 0x100;
-        byte* buf = stackalloc byte[MBI_SIZE];
-        if (VirtualQuery(addr, buf, MBI_SIZE) == 0) return false;
-        uint state = *(uint*)(buf + OFF_STATE);
-        uint protect = *(uint*)(buf + OFF_PROTECT);
-        if (state != MEM_COMMIT) return false;
-        if ((protect & PAGE_NOACCESS) != 0) return false;
-        if ((protect & PAGE_GUARD) != 0) return false;
-        return true;
-    }
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     // ── Name tables ───────────────────────────────────────────────────────
 
@@ -6037,6 +6100,13 @@ internal unsafe class FieldTracker
         "Memories of Meeting",
     };
 
+    /// <summary>The Check-prompt blip (2026-09-04): a light rising two-note tick on the shared
+    /// mixer. Also the settings row's preview.</summary>
+    internal static void PlayCheckCue(float vol)
+    {
+        try { Navigation.ToneCue.PlayTones(0.45f * vol, (1046f, 30), (0f, 25), (1318f, 45)); } catch { }
+    }
+
     internal static unsafe int DungeonFloorId()
     {
         if (!IsReadable(FloorIdSingleton, 8)) return 0;
@@ -6126,7 +6196,12 @@ internal unsafe class FieldTracker
             // Path 1..19" (the game's own strings @0x930C98+; its portal menu lists "Continue
             // from Path N", fd030_001.msg). Entrance id 140 = "Ashihara Nakatsu" via its
             // _floorNameOverrides key.
-            8 when floor <= 19 => $"Yomotsu Hirasaka, Path {floor}",
+            // ⚠ Only Path 1..9 EXIST (the msg's "Path 2..19" is a padded template). Ids 150-159
+            // are reused by SCRIPTED scenes — the game's opening dream sits on id 159 and its
+            // screen shows "???" — so speak "???" too, never the dungeon's name (spoiler,
+            // user-caught 2026-09-04).
+            8 when floor <= 9 => $"Yomotsu Hirasaka, Path {floor}",
+            8 => "???",
             // Dungeon 9 = Hollow Forest: 10 fixed floors, each with a unique on-screen
             // "Memories of ___" name (no dungeon prefix, no floor number on screen).
             9 when floor <= 10 => HollowForestFloorNames[floor],

@@ -107,6 +107,9 @@ internal unsafe class SkillReplaceMenu : IDisposable
     private readonly Dictionary<int, long> _drawnSkills = new();   // skill id -> last-drawn tick
     private bool _capWasActive;
     private long _pendingIncomingSince;                            // first-frame hold (see Read)
+    private long _poolFloorMs;                                     // drawn names at/before this tick belong to a PREVIOUS prompt
+    private int _resolvedIncoming;                                 // what this prompt announced — re-entering the slot repeats it
+    private int _holdFirstLvlNext;                                 // +0x6E as seen on the FIRST held frame (staleness diag)
     private static Dictionary<string, int>? _nameToId;             // EXACT name -> id, lazy
 
     private nint OnUiText(nint p1, byte p2, byte p3, uint p4, byte p5, nint p6)
@@ -117,7 +120,7 @@ internal unsafe class SkillReplaceMenu : IDisposable
         {
             if (!RecentlyActive)
             {
-                if (_capWasActive) { _capWasActive = false; _drawnSkills.Clear(); }
+                if (_capWasActive) { _capWasActive = false; _drawnSkills.Clear(); _resolvedIncoming = 0; }
                 return ret;
             }
             _capWasActive = true;
@@ -216,61 +219,78 @@ internal unsafe class SkillReplaceMenu : IDisposable
                     : $"Next level skill: {nnm}. {nds}.", interrupt: true);
                 return;
             }
-            // FULL persona — the real replace screen. FLOW DISPATCH (2026-07-06): in
-            // BATTLE/result context this is a LEVEL-UP learn and menu+0x6E is the proven
-            // id. In the FIELD (S.Link / book / scooter) +0x6E is WRONG — it's just the
-            // next level-up skill (the Amrita bug) — so use the freshest DRAWN skill
-            // name that isn't one of the current 8 (and isn't the level-next itself,
-            // whose name the screen also draws invisibly).
+            // FULL persona — the real replace screen. ONE RULE FOR BOTH FLOWS (2026-09-04,
+            // player reports "an ally's new skill sometimes reads wrong"): the incoming skill
+            // is the freshest DRAWN skill name that (a) is not one of the current 8 by id OR
+            // name (Teddie twin bug), and (b) was drawn AFTER this prompt opened — names left
+            // over from a PREVIOUS prompt (another ally's learn in the same result, the first
+            // of two skills learned at once) are fenced off by _poolFloorMs. Within the newest
+            // draw batch prefer an id ≠ +0x6E: the screen also draws +0x6E's name invisibly
+            // (the Amrita bug) so when the pool holds both, the OTHER one is the incoming.
+            // +0x6E alone (the persona's next LEVEL skill) was the whole battle path before —
+            // proven for a single level-up learn, never for the ally multi-learn cases — so it
+            // stays as the timed-out FALLBACK only.
             int lvlNext = IsReadable(menu + 0x6E, 2) ? *(ushort*)(menu + 0x6E) : 0;
             int nid = lvlNext;
-            if (!FieldTracker.IsBattleMajor(FieldTracker.CurrentMajor))
+            bool battle = FieldTracker.IsBattleMajor(FieldTracker.CurrentMajor);
+            var current = new HashSet<int>();
+            var currentNames = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < count && i < 8; i++)
+                if (IsReadable(menu + 0x0A + i * 0xC, 2))
+                {
+                    int cid = *(ushort*)(menu + 0x0A + i * 0xC);
+                    current.Add(cid);
+                    string cnm = (cid >= 1 && cid <= 1024) ? Skill.GetName(cid) : "";
+                    if (!string.IsNullOrEmpty(cnm)) currentNames.Add(cnm);
+                }
+            long now = Environment.TickCount64;
+            long best = 0; int bestId = 0;
+            var pool = new System.Text.StringBuilder();
+            foreach (var kv in _drawnSkills)
             {
-                var current = new HashSet<int>();
-                var currentNames = new HashSet<string>(StringComparer.Ordinal);
-                for (int i = 0; i < count && i < 8; i++)
-                    if (IsReadable(menu + 0x0A + i * 0xC, 2))
-                    {
-                        int cid = *(ushort*)(menu + 0x0A + i * 0xC);
-                        current.Add(cid);
-                        // NAME set too (Teddie bug 2026-07-28): a drawn name that matches ANY
-                        // current skill can never be the incoming skill — even when the name→id
-                        // map resolves it to a same-name TWIN id not in the current set.
-                        string cnm = (cid >= 1 && cid <= 1024) ? Skill.GetName(cid) : "";
-                        if (!string.IsNullOrEmpty(cnm)) currentNames.Add(cnm);
-                    }
-                long best = 0; int bestId = 0;
-                long now = Environment.TickCount64;
-                foreach (var kv in _drawnSkills)
-                {
-                    if (now - kv.Value > 20000 || current.Contains(kv.Key)) continue;
-                    if (currentNames.Contains(Skill.GetName(kv.Key))) continue;
-                    // The screen ALSO draws the next-LEVEL skill's name (log
-                    // 2026-07-06: "Diarama" rendered right before "Amrita" —
-                    // an invisible Next-LV element), so the pool held TWO
-                    // candidates and an arbitrary tie-break flip-flopped the
-                    // announcement. The level-next id is exactly what we must
-                    // NOT say here — exclude it; the fallback still covers the
-                    // (harmless) case where the incoming EQUALS the next-level.
-                    if (kv.Key == lvlNext) continue;
-                    if (kv.Value > best) { best = kv.Value; bestId = kv.Key; }
-                }
-                if (bestId == 0)
-                {
-                    // FIRST-FRAME RACE (user 2026-07-06): the menu opens with the
-                    // cursor already ON this slot, before the panel name has been
-                    // drawn/captured even once — announcing now speaks the wrong
-                    // level-up skill. HOLD: re-enter next render until the drawn
-                    // name lands; fall back to lvlNext only after ~0.7s.
-                    if (_pendingIncomingSince == 0) _pendingIncomingSince = now;
-                    if (now - _pendingIncomingSince < 450)
-                    {
-                        _lastCursor = -1;   // reprocess this slot next frame
-                        return;
-                    }
-                }
-                else nid = bestId;
+                pool.Append(kv.Key).Append('(').Append(Skill.GetName(kv.Key)).Append(")@")
+                    .Append(now - kv.Value).Append("ms ");
+                if (now - kv.Value > 20000 || kv.Value <= _poolFloorMs) continue;
+                if (current.Contains(kv.Key)) continue;
+                if (currentNames.Contains(Skill.GetName(kv.Key))) continue;
+                // Freshest wins; inside the newest ~100ms draw batch, ≠lvlNext beats ==lvlNext.
+                bool fresher = kv.Value > best + 100;
+                bool sameBatch = Math.Abs(kv.Value - best) <= 100;
+                if (bestId == 0 || fresher || (sameBatch && bestId == lvlNext && kv.Key != lvlNext))
+                { best = kv.Value; bestId = kv.Key; }
             }
+            string via;
+            if (bestId == 0)
+            {
+                // FIRST-FRAME RACE (user 2026-07-06): the menu opens with the cursor already
+                // ON this slot, before the panel name has been drawn/captured even once.
+                // HOLD: re-enter next render until the drawn name lands; fall back to lvlNext
+                // only after ~0.45s.
+                if (_pendingIncomingSince == 0) { _pendingIncomingSince = now; _holdFirstLvlNext = lvlNext; }
+                // Deadline, not a delay: the announce fires the moment the drawn name lands.
+                // FIELD flows get 1s (2026-09-04): the drawn name is the ONLY truth there, and
+                // slower PCs missed the old 450ms window → spoke the wrong (+0x6E) skill — the
+                // players' "ally skill reads wrong" reports; the user's fast PC never saw it.
+                // Battle never draws the name (log-proven, pool always empty) so it keeps 450ms.
+                if (now - _pendingIncomingSince < (battle ? 450 : 1000))
+                {
+                    _lastCursor = -1;   // reprocess this slot next frame
+                    return;
+                }
+                // Re-entering the slot (cursor moved off and back): the names of THIS prompt
+                // are already fenced off, so repeat what we resolved before rather than
+                // regress to +0x6E (the Amrita bug on a second visit).
+                if (_resolvedIncoming != 0) { nid = _resolvedIncoming; via = "resolved earlier"; }
+                else via = "FALLBACK +0x6E after hold";
+            }
+            else { nid = bestId; via = "drawn"; }
+            _resolvedIncoming = nid;
+            Log($"[SkillRepDiag] {(battle ? "battle" : "field")} major={FieldTracker.CurrentMajor} " +
+                $"count={count} lvlNext={lvlNext}({Skill.GetName(lvlNext)}) current=[{string.Join(",", current)}] " +
+                $"pool=[{pool.ToString().TrimEnd()}] floor={now - _poolFloorMs}ms ago -> {nid}({Skill.GetName(nid)}) via {via}" +
+                (via.StartsWith("FALLBACK") && _holdFirstLvlNext != lvlNext
+                    ? $" ⚠ +0x6E CHANGED during the hold: first frame {_holdFirstLvlNext}({Skill.GetName(_holdFirstLvlNext)})" : ""));
+            _poolFloorMs = now;   // everything drawn so far belongs to THIS prompt — fence it off for the next one
             _pendingIncomingSince = 0;
             if (nid < 1 || nid > 1024) return;
             string nm = Skill.GetName(nid);
@@ -291,19 +311,7 @@ internal unsafe class SkillReplaceMenu : IDisposable
     private static extern nint VirtualQuery(nint lpAddress, byte* lpBuffer, nint dwLength);
 
     private static bool IsReadable(nint addr, int size)
-    {
-        if (addr == 0) return false;
-        ulong a = (ulong)addr;
-        if (a < 0x10000UL || a > 0x00007FFFFFFFFFFFUL) return false;
-        byte* buf = stackalloc byte[48];
-        if (VirtualQuery(addr, buf, 48) == 0) return false;
-        if (*(uint*)(buf + 32) != 0x1000) return false;
-        uint protect = *(uint*)(buf + 36);
-        if ((protect & 0x01) != 0 || (protect & 0x100) != 0) return false;
-        nint regionBase = *(nint*)(buf + 0);
-        nint regionSize = *(nint*)(buf + 24);
-        return a + (ulong)size <= (ulong)regionBase + (ulong)regionSize;
-    }
+        => Utils.ProbeReadable(addr, size);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     public void Dispose() { }
 }

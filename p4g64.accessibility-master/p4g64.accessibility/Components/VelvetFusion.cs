@@ -1607,10 +1607,7 @@ internal unsafe class VelvetFusion : IDisposable
     // in the dispatch hook — THE velvet fusion cursor weight (PerfDiag: 6ms/dispatch).
     // Same semantics as before (page-of-a readable); RPM validates without the VAD walk.
     private static bool IsReadable(nint a)
-    {
-        byte t;
-        return Utils.TryReadRaw(a, &t, 1);
-    }
+        => Utils.ProbeReadable(a, 8);   // RPM probe (2026-08-31) — was a VirtualQuery copy; see Utils.ProbeReadable
 
     public void Dispose() { }
 }
