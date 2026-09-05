@@ -99,8 +99,17 @@ internal static class Speech
                 }
             }
         }
-        Record(text);
-        Tolk.Output(text, interrupt);
+        // TRANSLATION LAYER (2026-09-05): the mod's own prompts are authored in English at
+        // hundreds of call sites; instead of touching them all, the swap happens HERE — the one
+        // point every announcement converges on — using the ui_strings.tsv table for the game's
+        // language (see Localization). Deliberate split: the spam guard above keys on the
+        // ENGLISH text (stable regardless of language, and it is what the callers actually
+        // repeat), while history + Tolk get the TRANSLATION so repeat/browse read back exactly
+        // what was spoken. No table, or a language with no translations = Localization is
+        // disabled and Tr is a single bool test.
+        string spoken = Localization.Tr(text);
+        Record(spoken);
+        Tolk.Output(spoken, interrupt);
     }
 
     /// <summary>Record a line to history WITHOUT speaking it (e.g. dialogue while auto-read is off).</summary>
@@ -122,7 +131,10 @@ internal static class Speech
     {
         lock (_lock)
         {
-            if (_hist.Count == 0) { Tolk.Output("No history.", true); return; }
+            // The history browser is the only speech that bypasses SayCore (it must NOT re-record
+            // what it reads back), so its own fixed prompts are translated here; the history lines
+            // themselves were already translated on the way in.
+            if (_hist.Count == 0) { Tolk.Output(Localization.Tr("No history."), true); return; }
             _navIdx = _hist.Count;
             Tolk.Output(_hist[^1], true);
         }
@@ -133,11 +145,11 @@ internal static class Speech
     {
         lock (_lock)
         {
-            if (_hist.Count == 0) { Tolk.Output("No history.", true); return; }
+            if (_hist.Count == 0) { Tolk.Output(Localization.Tr("No history."), true); return; }
             if (_navIdx < 0 || _navIdx > _hist.Count - 1) _navIdx = _hist.Count;  // start from newest
             int next = _navIdx + dir;
-            if (next < 0) { _navIdx = 0; Tolk.Output("Start of history. " + _hist[0], true); return; }
-            if (next > _hist.Count - 1) { _navIdx = _hist.Count - 1; Tolk.Output("Newest. " + _hist[^1], true); return; }
+            if (next < 0) { _navIdx = 0; Tolk.Output(Localization.Tr("Start of history.") + " " + _hist[0], true); return; }
+            if (next > _hist.Count - 1) { _navIdx = _hist.Count - 1; Tolk.Output(Localization.Tr("Newest.") + " " + _hist[^1], true); return; }
             _navIdx = next;
             Tolk.Output(_hist[_navIdx], true);
         }
