@@ -53,6 +53,15 @@ namespace p4g64.accessibility;
 /// group at the very end of the template). The captured runtime values are then dropped into
 /// the {n} slots of the target-language template. First match wins.
 ///
+/// EXACT-ONLY MODE — a handful of components do not author prompts at all, they forward the GAME's
+/// own text (Dialogue, SubtitleReader, SystemMessage, MessageBubble, TelopReader, BacklogReader,
+/// InternetDialog, Tutorial, GameOverReader, SocialLinkDetail — the list lives in
+/// <c>Speech.ForwardedGameTextSources</c>). Speech.SayCore passes <c>exactOnly: true</c> for those,
+/// so the pattern rows are skipped and only the exact table applies. Without it a loose row could
+/// match a whole English game sentence and replace just the word it recognised, which is exactly
+/// how "…when you're in a pinch,和you to help others in turn" reached a player (2026-09-05).
+/// Their own fixed prompts are unaffected — an exact row still translates them.
+///
 /// Each captured value is itself looked up ONCE in the exact table on the way in (never in the
 /// patterns — that would recurse), because some captures are English words the C# side generated:
 /// month names, weekdays, directions. A single-word row like <c>date.month.april → 四月</c> in the
@@ -64,6 +73,12 @@ namespace p4g64.accessibility;
 ///   • The literal text left after removing every {n} must contain at least one letter or digit.
 ///     "{0} {1}" or "{0}: {1}" would otherwise compile into a regex matching nearly any sentence
 ///     — including the game's own dialogue, which is spoken through the same Speech.Say path.
+///   • That literal text must not be a lone "and" / "or" sitting BETWEEN placeholders, i.e. with
+///     no letter or digit at either end of the template. "{0} and {1}" passes the rule above yet
+///     still matches any sentence containing that word, and can only ever fix one prompt.
+///     Deliberately narrow: an edge anchor ("{0} HP", "Row {0}", "{0} on.") or a word that carries
+///     meaning ("{0} of {1}.", "{0}, now {1}") keeps the row — those only see sentences the mod
+///     assembled itself, and the exact-only mode above already shields the game's own text.
 ///   • The same {n} may appear only ONCE in <c>en</c>. "{0} beats {0}" would need a regex
 ///     back-reference; two independent groups would match too much and the second capture would
 ///     be discarded. Give the two parts distinct numbers ("{0} beats {1}") instead. The
@@ -211,14 +226,21 @@ internal static class Localization
     /// Swap an English mod prompt for its translation. False (and <paramref name="translated"/>
     /// left empty) whenever the layer is off or nothing matches — the caller then speaks the
     /// original. Never throws.
+    ///
+    /// <paramref name="exactOnly"/> = the line is NOT a mod prompt but text forwarded verbatim
+    /// from the game (dialogue, subtitles, tutorial pages …), so only the exact table may apply:
+    /// its fixed short prompts still translate, while the placeholder patterns — which are
+    /// written for the mod's own sentences and can match a stray English clause — are skipped.
+    /// See <c>Speech.ForwardedGameTextSources</c> for who gets this mode and why.
     /// </summary>
-    internal static bool TryTranslate(string en, out string translated)
+    internal static bool TryTranslate(string en, out string translated, bool exactOnly = false)
     {
         translated = "";
         if (!_enabled || string.IsNullOrEmpty(en)) return false;
         try
         {
             if (_exact.TryGetValue(en, out string? hit)) { translated = hit; return true; }
+            if (exactOnly) return false;   // forwarded game text — patterns must not rewrite it
 
             var patterns = _patterns;
             for (int i = 0; i < patterns.Length; i++)
@@ -239,7 +261,8 @@ internal static class Localization
     }
 
     /// <summary>Convenience wrapper: the translation, or the input unchanged.</summary>
-    internal static string Tr(string en) => TryTranslate(en, out string t) ? t : en;
+    internal static string Tr(string en, bool exactOnly = false)
+        => TryTranslate(en, out string t, exactOnly) ? t : en;
 
     // ── loading helpers ─────────────────────────────────────────────────────────
 
@@ -300,8 +323,9 @@ internal static class Localization
     /// Compile one "{n}" row: the English template becomes an anchored regex whose capture
     /// groups replace the placeholders, and the translation is pre-split at its own {n}s.
     /// Returns null (with a log line) for a row we refuse: a bad regex, an English side whose
-    /// literal text holds no letter or digit to anchor on, or a repeated {n}. See the
-    /// PLACEHOLDER ROW LIMITS section on the class for why.
+    /// literal text holds no letter or digit to anchor on, one that is nothing but a conjunction
+    /// between two placeholders, or a repeated {n}. See the PLACEHOLDER ROW LIMITS section on the
+    /// class for why.
     /// </summary>
     private static Pattern? BuildPattern(string en, string tr, RegexOptions opts)
     {
@@ -313,10 +337,18 @@ internal static class Localization
             var order = new List<int>();
             int pos = 0;
             bool anchored = false;   // does the literal text carry a letter or digit?
+            // Every literal chunk, joined by a space so two chunks can never fuse into one word,
+            // plus whether either EDGE of the template (before the first {n} / after the last)
+            // carries an anchor. Both only feed the conjunction check below.
+            var literalText = new StringBuilder();
+            bool edgeAnchored = false;
+            bool firstChunk = true;
             foreach (Match m in PlaceholderRe.Matches(en))
             {
                 string lit = en.Substring(pos, m.Index - pos);
                 anchored |= HasLetterOrDigit(lit);
+                if (firstChunk) { edgeAnchored |= HasLetterOrDigit(lit); firstChunk = false; }
+                literalText.Append(lit).Append(' ');
                 sb.Append(Regex.Escape(lit));
                 if (!int.TryParse(m.Groups[1].Value, out int slot)) return null;
                 if (order.Contains(slot))
@@ -335,6 +367,8 @@ internal static class Localization
             }
             string tail = en.Substring(pos);
             anchored |= HasLetterOrDigit(tail);
+            edgeAnchored |= HasLetterOrDigit(tail);
+            literalText.Append(tail);
             sb.Append(Regex.Escape(tail)).Append(@"\z");
             // Literal text that is only spaces and punctuation is no anchor at all: "{0} {1}"
             // compiles to \A(.+?)\ (.+)\z, which matches nearly ANY sentence — including the
@@ -343,6 +377,21 @@ internal static class Localization
             if (!anchored)
             {
                 Utils.Log($"[i18n] skipped row \"{en}\": nothing but placeholders and punctuation to match on (would rewrite unrelated lines)");
+                return null;
+            }
+            // Second belt (2026-09-05, the "…in a pinch,和you to help others…" report): "{0} and {1}"
+            // clears the anchor test above, yet it matches ANY sentence containing " and " and
+            // rewrites just that word. The exact-only rule in TryTranslate already shields the
+            // game-text channels, so this only has to catch the shape that stays dangerous
+            // everywhere else — a bare conjunction BETWEEN two placeholders, with no letter or
+            // digit at either end of the template to pin the match down. Deliberately narrow:
+            // rows with an edge anchor ("{0} HP", "Row {0}", "{0} on.") or a more meaningful
+            // inner word ("{0} of {1}.", "{0}, now {1}") only ever see sentences the mod itself
+            // assembled, and are kept.
+            string? conj = edgeAnchored ? null : LoneConjunction(literalText.ToString());
+            if (conj != null)
+            {
+                Utils.Log($"[i18n] skipped row \"{en}\": \"{conj}\" between placeholders is the only thing to match on (too generic — would rewrite unrelated lines)");
                 return null;
             }
 
@@ -391,6 +440,34 @@ internal static class Localization
         for (int i = 0; i < s.Length; i++)
             if (char.IsLetterOrDigit(s[i])) return true;
         return false;
+    }
+
+    /// <summary>Words carrying no meaning of their own — a template made of one of these is a trap.</summary>
+    private static readonly string[] BareConjunctions = { "and", "or" };
+
+    /// <summary>
+    /// The conjunction a template's literal text boils down to when it is NOTHING but one bare
+    /// conjunction; null for every other row (no word, two words, or any other word). The CALLER
+    /// additionally requires that neither edge of the template is anchored, which — with a single
+    /// word in play — is what makes that word an INNER one, sitting between two placeholders.
+    /// </summary>
+    private static string? LoneConjunction(string literal)
+    {
+        string? only = null;
+        int i = 0;
+        while (i < literal.Length)
+        {
+            if (!char.IsLetterOrDigit(literal[i])) { i++; continue; }
+            int start = i;
+            while (i < literal.Length && char.IsLetterOrDigit(literal[i])) i++;
+            if (only != null) return null;   // a second word → specific enough, keep the row
+            only = literal.Substring(start, i - start);
+        }
+        if (only == null) return null;       // no word at all — the anchor check already refused it
+
+        foreach (var c in BareConjunctions)
+            if (string.Equals(only, c, StringComparison.OrdinalIgnoreCase)) return only;
+        return null;
     }
 
     /// <summary>

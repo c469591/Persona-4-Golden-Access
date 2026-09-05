@@ -38,6 +38,22 @@ internal static class Speech
     private static long _protectedUntilMs;
     private static readonly Dictionary<string, long> _recentSaid = new();
 
+    // FORWARDED GAME TEXT (2026-09-05, user: "…when you're in a pinch,和you to help others…").
+    // These readers do not author prompts of their own — they hand the GAME's text straight to
+    // the screen reader (dialogue lines, subtitles, system messages, tutorial pages …). Such a
+    // line is arbitrary prose, so the translation layer's PATTERN rows have no business touching
+    // it: a row whose literal part is short enough ("{0} and {1}") can match an English sentence
+    // that merely contains that word and swap the word alone, leaving the mixed-language result
+    // the player heard. Lines from these sources are therefore translated by EXACT lookup only
+    // (see Localization.Tr's exactOnly) — their fixed short prompts still get translated, their
+    // forwarded prose never gets rewritten. Names are the source FILE names without .cs, matching
+    // the CallerFilePath tag computed in Say.
+    private static readonly HashSet<string> ForwardedGameTextSources = new(StringComparer.Ordinal)
+    {
+        "Dialogue", "SubtitleReader", "SystemMessage", "MessageBubble", "TelopReader",
+        "BacklogReader", "InternetDialog", "Tutorial", "GameOverReader", "SocialLinkDetail",
+    };
+
     // The game's text separates words with the Japanese IDEOGRAPHIC SPACE (U+3000),
     // not an ASCII space — some screen readers stumble on it (words run together /
     // odd pauses). Swap it for a normal space so EVERY announcement reads cleanly.
@@ -55,10 +71,14 @@ internal static class Speech
         // logged with the component that spoke it, so a player's log identifies the culprit
         // of any speech spam. CallerFilePath is a COMPILE-TIME constant — zero runtime cost;
         // the substring below runs once per spoken sentence (a few per second at most).
+        // The tag is also handed to SayCore, which uses it to decide how the translation layer
+        // may touch this line (see ForwardedGameTextSources). Empty for a blank line — SayCore
+        // drops those before it reaches anything that reads the tag.
+        string src = "";
         if (!string.IsNullOrWhiteSpace(text))
         {
             int cut = callerFile.LastIndexOfAny(new[] { '\\', '/' });
-            string src = cut >= 0 ? callerFile.Substring(cut + 1) : callerFile;
+            src = cut >= 0 ? callerFile.Substring(cut + 1) : callerFile;
             if (src.EndsWith(".cs")) src = src.Substring(0, src.Length - 3);
             long now = Environment.TickCount64;
             bool downgraded = false;
@@ -72,11 +92,13 @@ internal static class Speech
         }
         // TEMP perf shim (heaviness diag 2026-07-27): measures the full cost incl. Tolk IPC.
         long t0 = Components.PerfDiag.Begin();
-        try { SayCore(text, interrupt); }
+        try { SayCore(text, interrupt, src); }
         finally { Components.PerfDiag.End(Components.PerfDiag.B.SpeechSay, t0); }
     }
 
-    private static void SayCore(string text, bool interrupt = true)
+    /// <param name="src">Speaking component (file name without .cs) as tagged by <see cref="Say"/>;
+    /// "" when unknown, which simply means the full translation table applies.</param>
+    private static void SayCore(string text, bool interrupt = true, string src = "")
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         text = Normalize(text);
@@ -106,8 +128,9 @@ internal static class Speech
         // ENGLISH text (stable regardless of language, and it is what the callers actually
         // repeat), while history + Tolk get the TRANSLATION so repeat/browse read back exactly
         // what was spoken. No table, or a language with no translations = Localization is
-        // disabled and Tr is a single bool test.
-        string spoken = Localization.Tr(text);
+        // disabled and Tr is a single bool test. Lines forwarded verbatim from the game get the
+        // exact-only mode (no pattern rewriting) — see ForwardedGameTextSources above.
+        string spoken = Localization.Tr(text, ForwardedGameTextSources.Contains(src));
         Record(spoken);
         Tolk.Output(spoken, interrupt);
     }
