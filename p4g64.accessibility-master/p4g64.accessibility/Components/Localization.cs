@@ -55,12 +55,27 @@ namespace p4g64.accessibility;
 ///
 /// EXACT-ONLY MODE — a handful of components do not author prompts at all, they forward the GAME's
 /// own text (Dialogue, SubtitleReader, SystemMessage, MessageBubble, TelopReader, BacklogReader,
-/// InternetDialog, Tutorial, GameOverReader, SocialLinkDetail — the list lives in
+/// InternetDialog, Tutorial, GameOverReader, SocialLinkDetail, DifficultyMenu — the list lives in
 /// <c>Speech.ForwardedGameTextSources</c>). Speech.SayCore passes <c>exactOnly: true</c> for those,
 /// so the pattern rows are skipped and only the exact table applies. Without it a loose row could
 /// match a whole English game sentence and replace just the word it recognised, which is exactly
 /// how "…when you're in a pinch,和you to help others in turn" reached a player (2026-09-05).
 /// Their own fixed prompts are unaffected — an exact row still translates them.
+///
+/// CAPTURED-VALUE GUARD — the exact-only list is a NAMED set, so it can only protect the channels
+/// we already know about; a component nobody classified yet forwards prose through the full table
+/// and gets rewritten. So a second, source-agnostic rule runs on every pattern hit, right before
+/// the values are poured into the target template: if any CAPTURED value looks like English prose
+/// — 2 or more spaces AND 4 or more ASCII letters — the whole match is discarded and the line is
+/// returned untranslated, i.e. spoken as the original English. A mod prompt never interpolates a
+/// sentence; it interpolates numbers, names and single words ("5", "April", "Vox Populi"), all of
+/// which stay below that bar, and translated game text has no ASCII letters at all. What trips it
+/// is exactly the failure shape seen twice now: a list-style row such as "{0}. {1} of {2}."
+/// swallowing "Normal. This is the best balance of difficulty and enjoyment. …" and reading back
+/// as "Normal.第This is the best balance个，共difficulty and enjoyment…个" (2026-09-05,
+/// DifficultyMenu — which is ALSO on the exact-only list now; this rule is the net under it for
+/// the components we have not found yet). Cost is one character scan of the captures, only after a
+/// row has already matched.
 ///
 /// Each captured value is itself looked up ONCE in the exact table on the way in (never in the
 /// patterns — that would recurse), because some captures are English words the C# side generated:
@@ -249,6 +264,11 @@ internal static class Localization
                 try { m = patterns[i].Re.Match(en); }
                 catch (RegexMatchTimeoutException) { continue; }   // pathological row → ignore it
                 if (!m.Success) continue;
+                // CAPTURED-VALUE GUARD (see the class notes): a match that swallowed an English
+                // SENTENCE into one of its {n}s is a false positive, whatever row produced it.
+                // Give up on translating this line entirely rather than trying the next row —
+                // the same prose would just be offered to an equally loose pattern.
+                if (HasProseCapture(patterns[i], m)) return false;
                 translated = Fill(patterns[i], m);
                 return true;
             }
@@ -468,6 +488,37 @@ internal static class Localization
         foreach (var c in BareConjunctions)
             if (string.Equals(only, c, StringComparison.OrdinalIgnoreCase)) return only;
         return null;
+    }
+
+    /// <summary>
+    /// Did this match pour an English SENTENCE into one of its placeholders? Checks the capture
+    /// groups only (group 0 is the whole line, which legitimately contains the row's own words).
+    /// </summary>
+    private static bool HasProseCapture(Pattern p, Match m)
+    {
+        for (int g = 1; g <= p.SourceOrder.Length; g++)
+            if (LooksLikeProse(m.Groups[g].Value)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// "Looks like English prose": at least 2 spaces AND at least 4 ASCII letters. Chosen to clear
+    /// every value the mod actually interpolates — numbers ("5"), single words ("April", "North"),
+    /// and short proper nouns ("Vox Populi", one space) all pass through untouched — while a
+    /// forwarded sentence ("This is the best balance") is caught. Translated game text carries no
+    /// ASCII letters at all, so it is never affected either. One allocation-free character scan
+    /// over a value that is at most a line long; it runs only when a pattern already matched.
+    /// </summary>
+    private static bool LooksLikeProse(string s)
+    {
+        int spaces = 0, letters = 0;
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (c == ' ') spaces++;
+            else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')) letters++;
+        }
+        return spaces >= 2 && letters >= 4;
     }
 
     /// <summary>

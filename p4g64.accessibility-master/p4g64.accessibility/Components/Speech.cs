@@ -52,6 +52,13 @@ internal static class Speech
     {
         "Dialogue", "SubtitleReader", "SystemMessage", "MessageBubble", "TelopReader",
         "BacklogReader", "InternetDialog", "Tutorial", "GameOverReader", "SocialLinkDetail",
+        // DifficultyMenu joined on the same grounds (2026-09-05, user heard "Normal.第This is the
+        // best balance个，共difficulty and enjoyment. Please experience the tension.个"): its option
+        // DESCRIPTIONS are the game's own on-screen prose carried inside the component, so
+        // "Normal. <long English sentence>." was matched by a list-style "{0}. {1} of {2}." row and
+        // poured into the Chinese counter template. Forwarded game text in every way that matters
+        // here, even though those characters happen to live in our source file.
+        "DifficultyMenu",
     };
 
     // The game's text separates words with the Japanese IDEOGRAPHIC SPACE (U+3000),
